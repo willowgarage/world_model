@@ -78,6 +78,9 @@ def map_cb(message, args):
     # create a handle and do the update
     update_world = rospy.ServiceProxy('/update_world_model', UpdateWorldModel)
     update_world(entity)
+    
+    # don't update so quickly
+    rospy.sleep(1.0)
 
 def main():
     '''
@@ -91,8 +94,8 @@ def main():
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/map')
     ns = rospy.get_param('~ns', 'robot')
-    # subscribe to the topic
-    rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns})
+    # subscribe to the topic with a queue size of 1
+    rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns}, 1)
     
     rospy.loginfo('Map Listener is Ready!')
     rospy.spin()
