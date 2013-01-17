@@ -3,7 +3,7 @@ The Native class provides functions to natively communicate with a
 local world model database in mongo.
 
 @author:  Russell Toris
-@version: January 16, 2013
+@version: January 17, 2013
 '''
 
 from pymongo import Connection

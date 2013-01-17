@@ -5,7 +5,7 @@ The map_listener node listens to a specified OccupancyGrid message
 and updates the world model accordingly.
 
 @author:  Russell Toris
-@version: January 16, 2013
+@version: January 17, 2013
 '''
 
 import rospy
@@ -14,20 +14,20 @@ from worldlib.srv import UpdateWorldModel
 from worldlib.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
 from geometry_msgs.msg import Point32
 
-def map_cb(message, topic):
+def map_cb(message, args):
     '''
     Main callback for a map topic. This will insert a new entity in the world model
-    or update an existing entity if one exists with the same frame. 
+    or update an existing entity if one exists with the same name. 
     
     @param message: the ROS message for the map
     @type  message: OccupancyGrid
-    @param topic: the name of the topic
-    @type  topic: string
+    @param args: the topic name we are listening on and name-space for this node
+    @type  topic: dict
     '''
     entity = WorldModelEntity()
     
     # break up the message and store it
-    entity.name = message.header.frame_id
+    entity.name = args['ns'] + '-map'
     entity.timestamp =  message.header.stamp
     
     pose = WorldModelPose()
@@ -70,7 +70,7 @@ def map_cb(message, topic):
     entity.config.polygon.points.append(p3)
     
     observation = WorldModelObservation()
-    observation.topic = topic
+    observation.topic = args['topic']
     entity.observations.append(observation)
     
     entity.tags.append('map')
@@ -90,8 +90,9 @@ def main():
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/map')
+    ns = rospy.get_param('~ns', 'robot')
     # subscribe to the topic
-    rospy.Subscriber(t, OccupancyGrid, map_cb, t)
+    rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns})
     
     rospy.loginfo('Map Listener is Ready!')
     rospy.spin()

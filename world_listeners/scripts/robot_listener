@@ -5,7 +5,7 @@ The robot_listener node listens to a specified Pose message from the robot_pose_
 and updates the world model accordingly.
 
 @author:  Russell Toris
-@version: January 16, 2013
+@version: January 17, 2013
 '''
 
 import rospy
@@ -20,10 +20,8 @@ def pose_cb(message, args):
     
     @param message: the ROS message for the pose
     @type  message: Pose
-    @param topic: the name of the topic
-    @type  topic: string
-    @param ns: the name-space of the robot (i.g., their name)
-    @type  ns: string
+    @param args: the topic name we are listening on and name-space for this node
+    @type  topic: dict
     '''
     entity = WorldModelEntity()
     
@@ -39,7 +37,7 @@ def pose_cb(message, args):
     pose.tf.rotation.y = message.orientation.y
     pose.tf.rotation.z = message.orientation.z
     pose.tf.rotation.w = message.orientation.w
-    pose.ref = 'map'
+    pose.ref = args['ns'] + '-map'
     pose.rel = 'in'
     entity.poses.append(pose)
     
@@ -73,12 +71,12 @@ def main():
     resp = search(ns)
     # check if we should send in an initial pose
     if resp.exists:
-        pub = rospy.Publisher('initialpose', PoseWithCovarianceStamped)
+        pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped)
         pose = PoseWithCovarianceStamped()
         pose.header.seq = 1
         pose.header.frame_id = '/map'
         for p in resp.entity.poses:
-            if p.ref == 'map':
+            if p.ref == args['ns'] + '-map':
                 pose.pose.pose.position.x = p.tf.translation.x
                 pose.pose.pose.position.y = p.tf.translation.y
                 pose.pose.pose.position.z = p.tf.translation.z
@@ -90,10 +88,7 @@ def main():
         pub.publish(pose)
         rospy.sleep(1.0)
         pub.publish(pose)
-        
-        
-        
-    
+
     # subscribe to the topic
     rospy.Subscriber(t, Pose, pose_cb, {'topic' : t, 'ns' : ns})
     

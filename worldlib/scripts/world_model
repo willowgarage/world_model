@@ -4,7 +4,7 @@
 The world_model node exposes the worldlib API over ROS topics and services.
 
 @author:  Russell Toris
-@version: January 16, 2013
+@version: January 17, 2013
 '''
 
 import rospy
@@ -17,6 +17,14 @@ from rosbridge_library.internal.message_conversion import extract_values, popula
 world = native.Native()
 
 def update_world_model(request):
+    '''
+    The /update_world_model service call will update the given entity in the world model.
+    If no such entity exists with that name, one is created.
+    @param request: the service request
+    @type  request: UpdateWorldModel
+    @return: the service response
+    @rtype:  UpdateWorldModelResponse
+    '''
     # check if this is an update
     old = world.search_name(request.entity.name)
     if old is not None:
@@ -27,6 +35,13 @@ def update_world_model(request):
         return UpdateWorldModelResponse(True)
     
 def search_world_model_entity_by_name(request):
+    '''
+    The /search_world_model_entity_by_name service call will search for an entity with the given name.
+    @param request: the service request
+    @type  request: WorldModelEntityNameSearch
+    @return: the service response
+    @rtype:  WorldModelEntityNameSearchResponse
+    '''
     # simply check for the entity
     entity = world.search_name(request.name)
     if entity is not None:
