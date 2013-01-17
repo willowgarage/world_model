@@ -78,9 +78,6 @@ def map_cb(message, args):
     # create a handle and do the update
     update_world = rospy.ServiceProxy('/update_world_model', UpdateWorldModel)
     update_world(entity)
-    
-    # don't update so quickly
-    rospy.sleep(1.0)
 
 def main():
     '''
