@@ -9,12 +9,12 @@ The world_model node exposes the worldlib API over ROS topics and services.
 
 import rospy
 from worldlib import native
-from worldlib.srv import UpdateWorldModel, UpdateWorldModelResponse
+from worldlib.srv import *
+from worldlib.msg import WorldModelEntity
 from json import JSONEncoder
-from rosbridge_library.internal.message_conversion import extract_values
+from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 
 world = native.Native()
-encoder = JSONEncoder()
 
 def update_world_model(request):
     # check if this is an update
@@ -25,6 +25,15 @@ def update_world_model(request):
     else:
         world.insert(extract_values(request.entity))
         return UpdateWorldModelResponse(True)
+    
+def search_world_model_entity_by_name(request):
+    # simply check for the entity
+    entity = world.search_name(request.name)
+    if entity is not None:
+        del entity['_id']
+        return WorldModelEntityNameSearchResponse(populate_instance(entity, WorldModelEntity()), True)
+    else:
+        return WorldModelEntityNameSearchResponse(None, False)
 
 def main():
     '''
@@ -33,6 +42,7 @@ def main():
     rospy.init_node('world_model')
     # advertise the service
     service = rospy.Service('/update_world_model', UpdateWorldModel, update_world_model)
+    service = rospy.Service('/search_world_model_entity_by_name', WorldModelEntityNameSearch, search_world_model_entity_by_name)
     rospy.loginfo('World Model Node is Ready')
     rospy.spin()
 

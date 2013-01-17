@@ -32,8 +32,8 @@ def map_cb(message, topic):
     
     pose = WorldModelPose()
     pose.tf.translation.x = message.info.origin.position.x
-    pose.tf.translation.y =  message.info.origin.position.y
-    pose.tf.translation.z =  message.info.origin.position.z
+    pose.tf.translation.y = message.info.origin.position.y
+    pose.tf.translation.z = message.info.origin.position.z
     # we assume all maps are level as a reference point
     pose.tf.rotation.x = 0.0
     pose.tf.rotation.y = 0.0
@@ -73,7 +73,7 @@ def map_cb(message, topic):
     observation.topic = topic
     entity.observations.append(observation)
     
-    entity.tags.append("map")
+    entity.tags.append('map')
 
     # create a handle and do the update
     update_world = rospy.ServiceProxy('/update_world_model', UpdateWorldModel)
