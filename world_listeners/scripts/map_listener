@@ -10,8 +10,8 @@ and updates the world model accordingly.
 
 import rospy
 from nav_msgs.msg import OccupancyGrid
-from worldlib.srv import UpdateWorldModel
-from worldlib.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
+from world_msgs.srv import UpdateWorldModel
+from world_msgs.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
 from geometry_msgs.msg import Point32
 
 def map_cb(message, args):

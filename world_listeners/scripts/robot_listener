@@ -9,8 +9,8 @@ and updates the world model accordingly.
 '''
 
 import rospy
-from worldlib.srv import UpdateWorldModel, WorldModelEntityNameSearch
-from worldlib.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
+from world_msgs.srv import UpdateWorldModel, WorldModelEntityNameSearch
+from world_msgs.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 
 def pose_cb(message, args):
@@ -53,7 +53,7 @@ def pose_cb(message, args):
 
 def main():
     '''
-    The main run function for the pose_listener node.
+    The main run function for the robot_listener node.
     '''
     rospy.init_node('robot_listener')
     # wait for the world model node
@@ -76,7 +76,7 @@ def main():
         pose.header.seq = 1
         pose.header.frame_id = '/map'
         for p in resp.entity.poses:
-            if p.ref == args['ns'] + '-map':
+            if p.ref == ns + '-map':
                 pose.pose.pose.position.x = p.tf.translation.x
                 pose.pose.pose.position.y = p.tf.translation.y
                 pose.pose.pose.position.z = p.tf.translation.z

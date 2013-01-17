@@ -1,0 +1,4 @@
+string name
+---
+world_msgs/WorldModelEntity entity
+bool exists
