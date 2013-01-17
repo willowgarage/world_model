@@ -1,0 +1,101 @@
+#!/usr/bin/env python
+
+'''
+The map_listener node listens to a specified OccupancyGrid message
+and updates the world model accordingly.
+
+@author:  Russell Toris
+@version: January 16, 2013
+'''
+
+import rospy
+from nav_msgs.msg import OccupancyGrid
+from worldlib.srv import UpdateWorldModel
+from worldlib.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
+from geometry_msgs.msg import Point32
+
+def map_cb(message, topic):
+    '''
+    Main callback for a map topic. This will insert a new entity in the world model
+    or update an existing entity if one exists with the same frame. 
+    
+    @param message: the ROS message for the map
+    @type  message: OccupancyGrid
+    @param topic: the name of the topic
+    @type  topic: string
+    '''
+    entity = WorldModelEntity()
+    
+    # break up the message and store it
+    entity.name = message.header.frame_id
+    entity.timestamp =  message.header.stamp
+    
+    pose = WorldModelPose()
+    pose.tf.translation.x = message.info.origin.position.x
+    pose.tf.translation.y =  message.info.origin.position.y
+    pose.tf.translation.z =  message.info.origin.position.z
+    # we assume all maps are level as a reference point
+    pose.tf.rotation.x = 0.0
+    pose.tf.rotation.y = 0.0
+    pose.tf.rotation.z = 0.0
+    pose.tf.rotation.w = 1.0
+    pose.belief = [0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0]
+    entity.poses.append(pose)
+    
+    # add the bounding box
+    p0 = Point32()
+    p0.x = message.info.origin.position.x
+    p0.y = message.info.origin.position.y
+    p0.z = message.info.origin.position.z
+    p1 = Point32()
+    p1.x = message.info.origin.position.x + (message.info.resolution * message.info.width)
+    p1.y = message.info.origin.position.y
+    p1.z = message.info.origin.position.z
+    p2 = Point32()
+    p2.x = message.info.origin.position.x + (message.info.resolution * message.info.width)
+    p2.y = message.info.origin.position.y + (message.info.resolution * message.info.height)
+    p2.z = message.info.origin.position.z
+    p3 = Point32()
+    p3.x = message.info.origin.position.x
+    p3.y = message.info.origin.position.y + (message.info.resolution * message.info.height)
+    p3.z = message.info.origin.position.z
+    entity.config.polygon.points.append(p0)
+    entity.config.polygon.points.append(p1)
+    entity.config.polygon.points.append(p2)
+    entity.config.polygon.points.append(p3)
+    
+    observation = WorldModelObservation()
+    observation.topic = topic
+    entity.observations.append(observation)
+    
+    entity.tags.append("map")
+
+    # create a handle and do the update
+    update_world = rospy.ServiceProxy('/update_world_model', UpdateWorldModel)
+    update_world(entity)
+
+def main():
+    '''
+    The main run function for the map_listener node.
+    '''
+    rospy.init_node('map_listener')
+    # wait for the world model node
+    rospy.loginfo('Waiting for /update_world_model to become available...')
+    rospy.wait_for_service('/update_world_model')
+    
+    # check for a topic to listen on
+    t = rospy.get_param('~topic', '/map')
+    # subscribe to the topic
+    rospy.Subscriber(t, OccupancyGrid, map_cb, t)
+    
+    rospy.loginfo('Map Listener is Ready!')
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    main()
