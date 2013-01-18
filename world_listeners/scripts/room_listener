@@ -9,7 +9,7 @@ inside the namespace's internal map.
 '''
 
 import rospy
-from world_msgs.srv import UpdateWorldModel
+from world_msgs.srv import UpdateWorldModel, WorldModelEntityNameSearch
 from world_msgs.msg import WorldModelEntity, WorldModelPose, WorldModelObservation, PolygonWithPose
 
 def polygon_cb(message, args):
@@ -26,14 +26,15 @@ def polygon_cb(message, args):
     counter = 0
     while True:
         search = rospy.ServiceProxy('/search_world_model_entity_by_name', WorldModelEntityNameSearch)
-        resp = search(args['ns'] + '-room-' + counter)
+        resp = search(args['ns'] + '-room-' + str(counter))
         if not resp.exists:
             break
+        else:
+            counter += 1
     
     entity = WorldModelEntity()
-    
     # break up the message and store it
-    entity.name = args['ns'] + '-room-' + counter
+    entity.name = args['ns'] + '-room-' + str(counter)
     entity.timestamp =  rospy.get_rostime()
     
     pose = WorldModelPose()
