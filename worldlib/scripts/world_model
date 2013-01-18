@@ -9,8 +9,8 @@ The world_model node exposes the worldlib API over ROS topics and services.
 
 import rospy
 from worldlib import native
-from worldlib.srv import *
-from worldlib.msg import WorldModelEntity
+from world_msgs.srv import *
+from world_msgs.msg import WorldModelEntity
 from json import JSONEncoder
 from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 

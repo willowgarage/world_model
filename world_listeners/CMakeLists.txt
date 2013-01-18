@@ -23,6 +23,6 @@ catkin_package()
 ## Install ##
 #############
 
-install(PROGRAMS scripts/map_listener scripts/robot_listener
+install(PROGRAMS scripts/map_listener scripts/robot_listener scripts/room_listener
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

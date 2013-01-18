@@ -1,0 +1,86 @@
+#!/usr/bin/env python
+
+'''
+The room_listener node listens for PolygonWithPose messages and tags them as rooms
+inside the namespace's internal map.
+
+@author:  Russell Toris
+@version: January 17, 2013
+'''
+
+import rospy
+from world_msgs.srv import UpdateWorldModel, WorldModelEntityNameSearch
+from world_msgs.msg import WorldModelEntity, WorldModelPose, WorldModelObservation, PolygonWithPose
+
+def polygon_cb(message, args):
+    '''
+    Main callback for a polygon with pose topic. This will insert a new entity in the world model
+    assuming the /map parent frame and tag it as a room.
+    
+    @param message: the ROS message for the pose
+    @type  message: Pose
+    @param args: the topic name we are listening on and name-space for this node
+    @type  topic: dict
+    '''
+    # we need to check the counter number for this room
+    counter = 0
+    while True:
+        search = rospy.ServiceProxy('/search_world_model_entity_by_name', WorldModelEntityNameSearch)
+        resp = search(args['ns'] + '-room-' + str(counter))
+        if not resp.exists:
+            break
+        else:
+            counter += 1
+    
+    entity = WorldModelEntity()
+    # break up the message and store it
+    entity.name = args['ns'] + '-room-' + str(counter)
+    entity.timestamp =  rospy.get_rostime()
+    
+    pose = WorldModelPose()
+    pose.tf.translation.x = message.pose.position.x
+    pose.tf.translation.y = message.pose.position.y
+    pose.tf.translation.z = message.pose.position.z
+    pose.tf.rotation.x = message.pose.orientation.x
+    pose.tf.rotation.y = message.pose.orientation.y
+    pose.tf.rotation.z = message.pose.orientation.z
+    pose.tf.rotation.w = message.pose.orientation.w
+    pose.ref = args['ns'] + '-map'
+    pose.rel = 'in'
+    entity.poses.append(pose)
+
+    entity.config.polygon = message.polygon
+    
+    observation = WorldModelObservation()
+    observation.topic = args['topic']
+    entity.observations.append(observation)
+    
+    entity.tags.append('room')
+
+    # create a handle and do the update
+    update_world = rospy.ServiceProxy('/update_world_model', UpdateWorldModel)
+    update_world(entity)
+
+def main():
+    '''
+    The main run function for the room_listener node.
+    '''
+    rospy.init_node('room_listener')
+    # wait for the world model node
+    rospy.loginfo('Waiting for /update_world_model to become available...')
+    rospy.wait_for_service('/update_world_model')
+    rospy.loginfo('Waiting for /search_world_model_entity_by_name to become available...')
+    rospy.wait_for_service('/search_world_model_entity_by_name')
+    
+    # check for a topic to listen on
+    t = rospy.get_param('~topic', '/rooms')
+    ns = rospy.get_param('~ns', 'robot')
+
+    # subscribe to the topic
+    rospy.Subscriber(t, PolygonWithPose, polygon_cb, {'topic' : t, 'ns' : ns})
+    
+    rospy.loginfo('Room Listener is Ready!')
+    rospy.spin()
+
+if __name__ == '__main__':
+    main()

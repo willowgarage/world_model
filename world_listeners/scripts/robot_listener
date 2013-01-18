@@ -9,8 +9,8 @@ and updates the world model accordingly.
 '''
 
 import rospy
-from worldlib.srv import UpdateWorldModel, WorldModelEntityNameSearch
-from worldlib.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
+from world_msgs.srv import UpdateWorldModel, WorldModelEntityNameSearch
+from world_msgs.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 
 def pose_cb(message, args):
@@ -50,10 +50,13 @@ def pose_cb(message, args):
     # create a handle and do the update
     update_world = rospy.ServiceProxy('/update_world_model', UpdateWorldModel)
     update_world(entity)
+    
+    # don't update so quickly
+    rospy.sleep(1.0)
 
 def main():
     '''
-    The main run function for the pose_listener node.
+    The main run function for the robot_listener node.
     '''
     rospy.init_node('robot_listener')
     # wait for the world model node
@@ -76,7 +79,7 @@ def main():
         pose.header.seq = 1
         pose.header.frame_id = '/map'
         for p in resp.entity.poses:
-            if p.ref == args['ns'] + '-map':
+            if p.ref == ns + '-map':
                 pose.pose.pose.position.x = p.tf.translation.x
                 pose.pose.pose.position.y = p.tf.translation.y
                 pose.pose.pose.position.z = p.tf.translation.z
@@ -84,9 +87,9 @@ def main():
                 pose.pose.pose.orientation.y = p.tf.rotation.y
                 pose.pose.pose.orientation.z = p.tf.rotation.z
                 pose.pose.pose.orientation.w = p.tf.rotation.w
-        # sometimes the first message is not heard
-        pub.publish(pose)
-        rospy.sleep(1.0)
+        # wait for someone to hear it
+        while pub.get_num_connections() < 1 and not rospy.is_shutdown():
+            rospy.sleep(0.1)
         pub.publish(pose)
 
     # subscribe to the topic

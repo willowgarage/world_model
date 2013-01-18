@@ -10,8 +10,8 @@ and updates the world model accordingly.
 
 import rospy
 from nav_msgs.msg import OccupancyGrid
-from worldlib.srv import UpdateWorldModel
-from worldlib.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
+from world_msgs.srv import UpdateWorldModel
+from world_msgs.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
 from geometry_msgs.msg import Point32
 
 def map_cb(message, args):
@@ -91,8 +91,8 @@ def main():
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/map')
     ns = rospy.get_param('~ns', 'robot')
-    # subscribe to the topic
-    rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns})
+    # subscribe to the topic with a queue size of 1
+    rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns}, 1)
     
     rospy.loginfo('Map Listener is Ready!')
     rospy.spin()
