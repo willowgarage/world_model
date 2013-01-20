@@ -1,4 +1,4 @@
-string name
+string frame_id
 ---
 world_msgs/WorldModelEntity entity
 bool exists

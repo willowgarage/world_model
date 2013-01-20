@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 '''
-The room_listener node listens for PolygonWithPose messages and tags them as rooms
-inside the namespace's internal map.
+The robot_pose_listener node listens to a specified Pose message from the robot_pose_publisher
+and updates the world model accordingly.
 
 @author:  Russell Toris
 @version: January 17, 2013
@@ -10,33 +10,25 @@ inside the namespace's internal map.
 
 import rospy
 from world_msgs.srv import UpdateWorldModel, WorldModelEntityFrameIdSearch
-from world_msgs.msg import WorldModelEntity, WorldModelObservation, PolygonWithPose, WorldModelRelationship
+from world_msgs.msg import WorldModelEntity, WorldModelRelationship, WorldModelObservation
+from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 
-def polygon_cb(message, args):
+def pose_cb(message, args):
     '''
-    Main callback for a polygon with pose topic. This will insert a new entity in the world model
-    assuming the robot's map parent frame and tag it as a room.
+    Main callback for a pose topic. This will insert a new entity in the world model
+    or update an existing entity if one exists assuming the robot's map parent frame.
     
     @param message: the ROS message for the pose
     @type  message: Pose
     @param args: the topic name we are listening on and name-space for this node
     @type  topic: dict
     '''
-    # we need to check the counter number for this room
-    counter = 0
-    while True:
-        search = rospy.ServiceProxy('/world_model/search_world_model_entity_by_frame_id', WorldModelEntityFrameIdSearch)
-        resp = search(args['ns'] + '_room_' + str(counter))
-        if not resp.exists:
-            break
-        else:
-            counter += 1
-    
     entity = WorldModelEntity()
-    # break up the message and store it
-    entity.frame_id = args['ns'] + '_room_' + str(counter)
     
-    entity.pose.pose.pose = message.pose
+    # break up the message and store it
+    entity.frame_id = args['ns'] + '_pose'
+    
+    entity.pose.pose.pose = message
     entity.pose.header.frame_id = args['ns'] + '_map'
     entity.pose.header.stamp = rospy.get_rostime()
     
@@ -45,26 +37,27 @@ def polygon_cb(message, args):
     rel.header.stamp = rospy.get_rostime()
     rel.rel = 'in'
     entity.relationships.append(rel)
-
-    entity.description.polygon = message.polygon
     
     observation = WorldModelObservation()
     observation.type = 'topic'
     observation.ref = args['topic']
     entity.observations.append(observation)
     
-    entity.tags.append('room')
+    entity.tags.append('robot')
     entity.tags.append(args['ns'])
 
     # create a handle and do the update
     update_world = rospy.ServiceProxy('/world_model/update_world_model', UpdateWorldModel)
     update_world(entity)
+    
+    # don't update so quickly
+    rospy.sleep(1.0)
 
 def main():
     '''
-    The main run function for the room_listener node.
+    The main run function for the robot_pose_listener node.
     '''
-    rospy.init_node('room_listener')
+    rospy.init_node('robot_pose_listener')
     # wait for the world model node
     rospy.loginfo('Waiting for /world_model/update_world_model to become available...')
     rospy.wait_for_service('/world_model/update_world_model')
@@ -72,13 +65,25 @@ def main():
     rospy.wait_for_service('/world_model/search_world_model_entity_by_frame_id')
     
     # check for a topic to listen on
-    t = rospy.get_param('~topic', '/rooms')
+    t = rospy.get_param('~topic', '/robot_pose')
     ns = rospy.get_param('~ns', 'robot')
+    
+    # check for an initial pose for this robot
+    search = rospy.ServiceProxy('/world_model/search_world_model_entity_by_frame_id', WorldModelEntityFrameIdSearch)
+    resp = search(ns + '_pose')
+    # check if we should send in an initial pose
+    if resp.exists:
+        pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped)
+        resp.entity.pose.header.frame_id = '/map'
+        # wait for someone to hear it
+        while pub.get_num_connections() < 1 and not rospy.is_shutdown():
+            rospy.sleep(0.1)
+        pub.publish(resp.entity.pose)
 
     # subscribe to the topic
-    rospy.Subscriber(t, PolygonWithPose, polygon_cb, {'topic' : t, 'ns' : ns})
+    rospy.Subscriber(t, Pose, pose_cb, {'topic' : t, 'ns' : ns})
     
-    rospy.loginfo('Room Listener is Ready!')
+    rospy.loginfo('Robot Pose Listener is Ready!')
     rospy.spin()
 
 if __name__ == '__main__':

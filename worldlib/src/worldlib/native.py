@@ -60,14 +60,14 @@ class Native(object):
         '''
         return self.world.find_one({'_id' : _id})
     
-    def search_name(self, name):
+    def search_frame_id(self, frame_id):
         '''
-        Search for and return the entity in the world model with the given name, if one exists.
+        Search for and return the entity in the world model with the given frame ID, if one exists.
         
-        @param name: the name field of the entity to search for
-        @type  name: string
-        @return: the entity found, or None if an invalid name was given
+        @param frame_id: the frame_id field of the entity to search for
+        @type  frame_id: string
+        @return: the entity found, or None if an invalid frame_id was given
         @rtype:  dict
         '''
-        return self.world.find_one({'name' : name})
+        return self.world.find_one({'frame_id' : frame_id})
             
