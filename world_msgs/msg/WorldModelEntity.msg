@@ -1,6 +1,9 @@
-string name
-time timestamp
-world_msgs/WorldModelPose[] poses 
-world_msgs/WorldModelConfig config
+string frame_id
+string label
+time creation
+time updated
+geometry_msgs/PoseWithCovarianceStamped pose
+world_msgs/WorldModelRelationship[] relationships
+world_msgs/WorldModelDescription description
 world_msgs/WorldModelObservation[] observations
 string[] tags

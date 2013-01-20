@@ -1,1 +1,2 @@
-string topic
+string type
+string ref

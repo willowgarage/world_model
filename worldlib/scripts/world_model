@@ -18,37 +18,40 @@ world = native.Native()
 
 def update_world_model(request):
     '''
-    The /update_world_model service call will update the given entity in the world model.
-    If no such entity exists with that name, one is created.
+    The update_world_model service call will update the given entity in the world model.
+    If no such entity exists with that ID, one is created.
     @param request: the service request
     @type  request: UpdateWorldModel
     @return: the service response
     @rtype:  UpdateWorldModelResponse
     '''
+    t = rospy.get_rostime()
+    request.entity.updated = t
     # check if this is an update
-    old = world.search_name(request.entity.name)
+    old = world.search_frame_id(request.entity.frame_id)
     if old is not None:
         world.update_entity(old['_id'], extract_values(request.entity))
         return UpdateWorldModelResponse(False)
     else:
+        request.entity.creation = t
         world.insert(extract_values(request.entity))
         return UpdateWorldModelResponse(True)
     
-def search_world_model_entity_by_name(request):
+def search_world_model_entity_by_frame_id(request):
     '''
-    The /search_world_model_entity_by_name service call will search for an entity with the given name.
+    The search_world_model_entity_by_frame_id service call will search for an entity with the given frame ID.
     @param request: the service request
-    @type  request: WorldModelEntityNameSearch
+    @type  request: WorldModelEntityFrameIdSearch
     @return: the service response
-    @rtype:  WorldModelEntityNameSearchResponse
+    @rtype:  WorldModelEntityFrameIdSearchResponse
     '''
     # simply check for the entity
-    entity = world.search_name(request.name)
+    entity = world.search_frame_id(request.frame_id)
     if entity is not None:
         del entity['_id']
-        return WorldModelEntityNameSearchResponse(populate_instance(entity, WorldModelEntity()), True)
+        return WorldModelEntityFrameIdSearchResponse(populate_instance(entity, WorldModelEntity()), True)
     else:
-        return WorldModelEntityNameSearchResponse(None, False)
+        return WorldModelEntityFrameIdSearchResponse(None, False)
 
 def main():
     '''
@@ -56,8 +59,8 @@ def main():
     '''
     rospy.init_node('world_model')
     # advertise the service
-    service = rospy.Service('/update_world_model', UpdateWorldModel, update_world_model)
-    service = rospy.Service('/search_world_model_entity_by_name', WorldModelEntityNameSearch, search_world_model_entity_by_name)
+    service = rospy.Service('~update_world_model', UpdateWorldModel, update_world_model)
+    service = rospy.Service('~search_world_model_entity_by_frame_id', WorldModelEntityFrameIdSearch, search_world_model_entity_by_frame_id)
     rospy.loginfo('World Model Node is Ready')
     rospy.spin()
 

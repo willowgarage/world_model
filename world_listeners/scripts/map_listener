@@ -11,7 +11,7 @@ and updates the world model accordingly.
 import rospy
 from nav_msgs.msg import OccupancyGrid
 from world_msgs.srv import UpdateWorldModel
-from world_msgs.msg import WorldModelEntity, WorldModelPose, WorldModelObservation
+from world_msgs.msg import WorldModelEntity, WorldModelObservation
 from geometry_msgs.msg import Point32
 
 def map_cb(message, args):
@@ -27,25 +27,10 @@ def map_cb(message, args):
     entity = WorldModelEntity()
     
     # break up the message and store it
-    entity.name = args['ns'] + '-map'
-    entity.timestamp =  message.header.stamp
+    entity.frame_id = args['ns'] + '_map'
     
-    pose = WorldModelPose()
-    pose.tf.translation.x = message.info.origin.position.x
-    pose.tf.translation.y = message.info.origin.position.y
-    pose.tf.translation.z = message.info.origin.position.z
-    # we assume all maps are level as a reference point
-    pose.tf.rotation.x = 0.0
-    pose.tf.rotation.y = 0.0
-    pose.tf.rotation.z = 0.0
-    pose.tf.rotation.w = 1.0
-    pose.belief = [0, 0, 0, 0, 0, 0,
-                   0, 0, 0, 0, 0, 0,
-                   0, 0, 0, 0, 0, 0,
-                   0, 0, 0, 0, 0, 0,
-                   0, 0, 0, 0, 0, 0,
-                   0, 0, 0, 0, 0, 0]
-    entity.poses.append(pose)
+    entity.pose.pose.pose = message.info.origin
+    entity.pose.header.stamp = message.header.stamp
     
     # add the bounding box
     p0 = Point32()
@@ -64,19 +49,21 @@ def map_cb(message, args):
     p3.x = message.info.origin.position.x
     p3.y = message.info.origin.position.y + (message.info.resolution * message.info.height)
     p3.z = message.info.origin.position.z
-    entity.config.polygon.points.append(p0)
-    entity.config.polygon.points.append(p1)
-    entity.config.polygon.points.append(p2)
-    entity.config.polygon.points.append(p3)
+    entity.description.bbox.points.append(p0)
+    entity.description.bbox.points.append(p1)
+    entity.description.bbox.points.append(p2)
+    entity.description.bbox.points.append(p3)
     
     observation = WorldModelObservation()
-    observation.topic = args['topic']
+    observation.type = 'topic'
+    observation.ref = args['topic']
     entity.observations.append(observation)
     
-    entity.tags.append('map')
+    entity.tags.append('robot')
+    entity.tags.append(args['ns'])
 
     # create a handle and do the update
-    update_world = rospy.ServiceProxy('/update_world_model', UpdateWorldModel)
+    update_world = rospy.ServiceProxy('/world_model/update_world_model', UpdateWorldModel)
     update_world(entity)
 
 def main():
@@ -85,8 +72,8 @@ def main():
     '''
     rospy.init_node('map_listener')
     # wait for the world model node
-    rospy.loginfo('Waiting for /update_world_model to become available...')
-    rospy.wait_for_service('/update_world_model')
+    rospy.loginfo('Waiting for /world_model/update_world_model to become available...')
+    rospy.wait_for_service('/world_model/update_world_model')
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/map')
