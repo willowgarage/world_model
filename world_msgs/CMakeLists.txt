@@ -14,17 +14,14 @@ find_package(catkin REQUIRED COMPONENTS std_msgs geometry_msgs message_generatio
 add_message_files(
   FILES
   PolygonWithPose.msg
-  WorldModelDescription.msg
-  WorldModelObservation.msg
-  WorldModelRelationship.msg
-  WorldModelEntity.msg
+  Source.msg
+  WorldObjectInstance.msg
 )
 
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
-  UpdateWorldModel.srv
-  WorldModelEntityFrameIdSearch.srv
+  CreateWorldObjectInstance.srv
 )
 
 ## Generate added messages and services with any dependencies listed here

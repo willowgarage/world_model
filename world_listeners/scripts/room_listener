@@ -73,7 +73,7 @@ def main():
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/rooms')
-    ns = rospy.get_param('~ns', 'robot')
+    ns = rospy.get_param('~ns', 'my_robot')
 
     # subscribe to the topic
     rospy.Subscriber(t, PolygonWithPose, polygon_cb, {'topic' : t, 'ns' : ns})

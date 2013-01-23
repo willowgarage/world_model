@@ -77,7 +77,7 @@ def main():
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/map')
-    ns = rospy.get_param('~ns', 'robot')
+    ns = rospy.get_param('~ns', 'my_robot')
     # subscribe to the topic with a queue size of 1
     rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns}, 1)
     

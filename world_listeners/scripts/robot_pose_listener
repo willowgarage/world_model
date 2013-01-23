@@ -66,7 +66,7 @@ def main():
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/robot_pose')
-    ns = rospy.get_param('~ns', 'robot')
+    ns = rospy.get_param('~ns', 'my_robot')
     
     # check for an initial pose for this robot
     search = rospy.ServiceProxy('/world_model/search_world_model_entity_by_frame_id', WorldModelEntityFrameIdSearch)
@@ -75,6 +75,8 @@ def main():
     if resp.exists:
         pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped)
         resp.entity.pose.header.frame_id = '/map'
+        # wait for the pose messages to become available so we know the localization node is up
+        rospy.wait_for_message(t, Pose)
         # wait for someone to hear it
         while pub.get_num_connections() < 1 and not rospy.is_shutdown():
             rospy.sleep(0.1)

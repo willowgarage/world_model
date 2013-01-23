@@ -4,66 +4,45 @@
 The world_model node exposes the worldlib API over ROS topics and services.
 
 @author:  Russell Toris
-@version: January 17, 2013
+@version: January 23, 2013
 '''
 
 import rospy
-from worldlib import native
+from worldlib import world_object_instance_database
 from world_msgs.srv import *
-from world_msgs.msg import WorldModelEntity
-from json import JSONEncoder
+from world_msgs.msg import WorldObjectInstance
 from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 
-world = native.Native()
+# the connection to the database
+woid = world_object_instance_database.WorldObjectInstanceDatabase()
 
-def update_world_model(request):
+def create_world_object_instance(request):
     '''
-    The update_world_model service call will update the given entity in the world model.
-    If no such entity exists with that ID, one is created.
-    @param request: the service request
-    @type  request: UpdateWorldModel
-    @return: the service response
-    @rtype:  UpdateWorldModelResponse
-    '''
-    t = rospy.get_rostime()
-    request.entity.updated = t
-    # check if this is an update
-    old = world.search_frame_id(request.entity.frame_id)
-    if old is not None:
-        world.update_entity(old['_id'], extract_values(request.entity))
-        return UpdateWorldModelResponse(False)
-    else:
-        request.entity.creation = t
-        world.insert(extract_values(request.entity))
-        return UpdateWorldModelResponse(True)
+    The create_world_object_instance service call will create a new instance in the world object 
+    instance database. A unique instance_id will be assigned and the creation time will be created.
     
-def search_world_model_entity_by_frame_id(request):
-    '''
-    The search_world_model_entity_by_frame_id service call will search for an entity with the given frame ID.
     @param request: the service request
-    @type  request: WorldModelEntityFrameIdSearch
+    @type  request: CreateWorldObjectInstance
     @return: the service response
-    @rtype:  WorldModelEntityFrameIdSearchResponse
+    @rtype:  CreateWorldObjectInstanceResponse
     '''
-    # simply check for the entity
-    entity = world.search_frame_id(request.frame_id)
-    if entity is not None:
-        del entity['_id']
-        return WorldModelEntityFrameIdSearchResponse(populate_instance(entity, WorldModelEntity()), True)
-    else:
-        return WorldModelEntityFrameIdSearchResponse(None, False)
+    # update the times
+    t = rospy.get_rostime()
+    request.instance.creation = t
+    request.instance.update = t
+    # convert to JSON and insert
+    instance_id = woid.insert(extract_values(request.instance))
+    return CreateWorldObjectInstanceResponse(instance_id)
 
 def main():
     '''
     The main run function for the world_model node.
     '''
     rospy.init_node('world_model')
-    # advertise the service
-    service = rospy.Service('~update_world_model', UpdateWorldModel, update_world_model)
-    service = rospy.Service('~search_world_model_entity_by_frame_id', WorldModelEntityFrameIdSearch, search_world_model_entity_by_frame_id)
+    # advertise the services
+    rospy.Service('~create_world_object_instance', CreateWorldObjectInstance, create_world_object_instance)
     rospy.loginfo('World Model Node is Ready')
     rospy.spin()
-
 
 if __name__ == '__main__':
     main()
