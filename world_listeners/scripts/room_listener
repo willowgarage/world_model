@@ -37,7 +37,7 @@ The room_listener node listens for PolygonWithPose messages and tags them as roo
 inside the namespace's internal map.
 
 @author:  Russell Toris
-@version: January 17, 2013
+@version: January 23, 2013
 '''
 
 import rospy

@@ -34,16 +34,17 @@
 
 '''
 The robot_pose_listener node listens to a specified Pose message from the robot_pose_publisher
-and updates the world model accordingly.
+and updates the world model accordingly. This node will also wait for the robot pose to be
+published and try to re-localize the robot upon startup.
 
 @author:  Russell Toris
-@version: January 17, 2013
+@version: January 24, 2013
 '''
 
 import rospy
-from world_msgs.srv import UpdateWorldModel, WorldModelEntityFrameIdSearch
-from world_msgs.msg import WorldModelEntity, WorldModelRelationship, WorldModelObservation
-from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
+from world_msgs.srv import *
+from world_msgs.msg import *
+from geometry_msgs.msg import PoseWithCovarianceStamped
 
 def pose_cb(message, args):
     '''
@@ -91,10 +92,12 @@ def main():
     '''
     rospy.init_node('robot_pose_listener')
     # wait for the world model node
-    rospy.loginfo('Waiting for /world_model/update_world_model to become available...')
-    rospy.wait_for_service('/world_model/update_world_model')
-    rospy.loginfo('Waiting for /world_model/search_world_model_entity_by_frame_id to become available...')
-    rospy.wait_for_service('/world_model/search_world_model_entity_by_frame_id')
+    rospy.loginfo('Waiting for /world_model/create_world_object_instance to become available...')
+    rospy.wait_for_service('/world_model/create_world_object_instance')
+    rospy.loginfo('Waiting for /world_model/update_world_object_instance to become available...')
+    rospy.wait_for_service('/world_model/update_world_object_instance')
+    rospy.loginfo('Waiting for /world_model/search_world_object_instance_tags to become available...')
+    rospy.wait_for_service('/world_model/search_world_object_instance_tags')
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/robot_pose')

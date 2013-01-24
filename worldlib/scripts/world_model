@@ -108,11 +108,11 @@ def main():
     '''
     rospy.init_node('world_model')
     # advertise the services
-    rospy.Service('~create_world_object_instance', CreateWorldObjectInstance, 
+    rospy.Service('~create_world_object_instance', CreateWorldObjectInstance,
                   create_world_object_instance)
-    rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch, 
+    rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch,
                   search_world_object_instance_tags)
-    rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance, 
+    rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance,
                   update_world_object_instance)
     rospy.loginfo('World Model Node is Ready')
     rospy.spin()

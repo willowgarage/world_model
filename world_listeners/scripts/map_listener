@@ -111,7 +111,6 @@ def main():
     
     # subscribe to the topic with a queue size of 1
     rospy.Subscriber(t, OccupancyGrid, map_cb, {'ns' : ns}, 1)
-    
 
     rospy.loginfo('Map Listener is Ready!')
     rospy.spin()
