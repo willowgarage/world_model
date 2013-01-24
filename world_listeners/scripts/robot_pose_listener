@@ -66,35 +66,41 @@ def pose_cb(message, args):
     
     # position information
     instance.pose.pose.pose = message
+    instance.pose.pose.covariance = [0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
     # get our map ID
-    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
-                                WorldObjectInstanceTagSearch)
-    resp = search(['map', args['ns']])
-    if(len(resp.instances) > 0):
+    map_search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
+                                    WorldObjectInstanceTagSearch)
+    map_resp = map_search(['map', args['ns']])
+    if(len(map_resp.instances) > 0):
         # check if we only found one (which should be the case)
-        if(len(resp.instances) > 1):
+        if(len(map_resp.instances) > 1):
             rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns'] + 
                           '". Defaulting to first result.')
         # assign the ID
-        instance.pose.header.frame_id = resp.instances[0].instance_id
+        instance.pose.header.frame_id = map_resp.instances[0].instance_id
     instance.pose.header.stamp = rospy.get_rostime()
     
     # tag this as a robot
     instance.tags = ['robot', args['ns']]
 
     # check if we already have a robot
-    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
-                                WorldObjectInstanceTagSearch)
-    resp = search(instance.tags)
-    if(len(resp.instances) > 0):
+    robot_search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
+                                      WorldObjectInstanceTagSearch)
+    robot_resp = robot_search(instance.tags)
+    if(len(robot_resp.instances) > 0):
         # check if we only found one (which should be the case)
-        if(len(resp.instances) > 1):
+        if(len(robot_resp.instances) > 1):
             rospy.logwarn('Multiple world object instances tagged with "robot" and "' + args['ns'] + 
                           '". Defaulting to first result.')
         # create a handle and do the update
         update = rospy.ServiceProxy('/world_model/update_world_object_instance',
                                     UpdateWorldObjectInstance)
-        update(resp.instances[0].instance_id, instance)
+        update(robot_resp.instances[0].instance_id, instance)
     else:
         # new instance
         instance.name = args['ns'] + ' Robot'
