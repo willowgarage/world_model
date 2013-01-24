@@ -7,7 +7,7 @@ time creation
 # last time this instance was updated
 time update
 # an estimate of how long this instance's information will be valid
-duration data
+duration expected_ttl
 # the actual time this instance was removed from the robot's working memory
 time perceived_end
 # source information for the origin of this instance

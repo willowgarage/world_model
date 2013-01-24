@@ -42,20 +42,20 @@ class WorldObjectInstanceDatabase(object):
         # return the instance ID
         return instance_id
             
-    def update_entity(self, _id, entity):
+    def update_entity_by_instance_id(self, instance_id, entity):
         '''
-        Update the entity in the world object instance database with the given ID, if one exists. 
-        Note that this ID is associated with the internal, database ID, not the instance_id.
+        Update the entity in the world object instance database with the given instance_id, if one
+        exists.
         
-        @param _id: the ID of the entity to update
-        @type  _id: string
+        @param instance_id: the instance_id of the entity to update
+        @type  instance_id: string
         @param entity: the entity to update with
         @type  entity: dict
-        @return: if an entity was found and updated with the given ID
+        @return: if an entity was found and updated with the given instance_id
         @rtype:  bool
         '''
-        # check if that id exists
-        return (self.db.find_and_modify({'_id':_id}, {'$set' : entity}) is None)
+        # check if that id exists and update it
+        return (self.db.find_and_modify({'instance_id' : instance_id}, {'$set' : entity}) is not None)
             
         
     def search__id(self, _id):

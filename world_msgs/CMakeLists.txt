@@ -23,6 +23,7 @@ add_service_files(
   FILES
   CreateWorldObjectInstance.srv
   WorldObjectInstanceTagSearch.srv
+  UpdateWorldObjectInstance.srv
 )
 
 ## Generate added messages and services with any dependencies listed here

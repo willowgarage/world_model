@@ -34,6 +34,25 @@ def create_world_object_instance(request):
     instance_id = woid.insert(extract_values(request.instance))
     return CreateWorldObjectInstanceResponse(instance_id)
 
+def update_world_object_instance(request):
+    '''
+    The update_world_object_instance service call will update an instance in the world object 
+    instance database. The update time will be set to the current time.
+    
+    @param request: the service request
+    @type  request: UpdateWorldObjectInstance
+    @return: the service response
+    @rtype:  UpdateWorldObjectInstanceResponse
+    '''
+    # update the update time
+    request.instance.update = rospy.get_rostime()
+    # convert to JSON and update
+    success = woid.update_entity_by_instance_id(request.instance_id, extract_values(request.instance))
+    if(success is not True):
+        rospy.logwarn(request.instance_id + ' could not be updated.')
+
+    return UpdateWorldObjectInstanceResponse(success)
+
 def search_world_object_instance_tags(request):
     '''
     Search for and return all instances in the database that have the given list of tags.
@@ -61,6 +80,8 @@ def main():
                   create_world_object_instance)
     rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch, 
                   search_world_object_instance_tags)
+    rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance, 
+                  update_world_object_instance)
     rospy.loginfo('World Model Node is Ready')
     rospy.spin()
 
