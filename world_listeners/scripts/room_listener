@@ -9,56 +9,66 @@ inside the namespace's internal map.
 '''
 
 import rospy
-from world_msgs.srv import UpdateWorldModel, WorldModelEntityFrameIdSearch
-from world_msgs.msg import WorldModelEntity, WorldModelObservation, PolygonWithPose, WorldModelRelationship
+from world_msgs.srv import *
+from world_msgs.msg import *
+import socket
 
 def polygon_cb(message, args):
     '''
-    Main callback for a polygon with pose topic. This will insert a new entity in the world model
-    assuming the robot's map parent frame and tag it as a room.
+    Main callback for a polygon with pose topic. This will insert a new entity in the world object 
+    instance database or update an existing entity if one exists with the same position. 
     
-    @param message: the ROS message for the pose
-    @type  message: Pose
+    @param message: the ROS message for the pose/polygon
+    @type  message: PolygonWithPose
     @param args: the topic name we are listening on and name-space for this node
     @type  topic: dict
     '''
-    # we need to check the counter number for this room
-    counter = 0
-    while True:
-        search = rospy.ServiceProxy('/world_model/search_world_model_entity_by_frame_id', WorldModelEntityFrameIdSearch)
-        resp = search(args['ns'] + '_room_' + str(counter))
-        if not resp.exists:
-            break
-        else:
-            counter += 1
-    
-    entity = WorldModelEntity()
     # break up the message and store it
-    entity.frame_id = args['ns'] + '_room_' + str(counter)
-    
-    entity.pose.pose.pose = message.pose
-    entity.pose.header.frame_id = args['ns'] + '_map'
-    entity.pose.header.stamp = rospy.get_rostime()
-    
-    rel = WorldModelRelationship()
-    rel.header.frame_id = args['ns'] + '_map'
-    rel.header.stamp = rospy.get_rostime()
-    rel.rel = 'in'
-    entity.relationships.append(rel)
+    instance = WorldObjectInstance()
 
-    entity.description.polygon = message.polygon
+    # source information for this node
+    instance.source.origin = socket.gethostname()
+    instance.source.creator = 'room_listener'
     
-    observation = WorldModelObservation()
-    observation.type = 'topic'
-    observation.ref = args['topic']
-    entity.observations.append(observation)
+    # position information
+    instance.pose.pose.pose = message.pose
+    # get our map ID
+    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
+                                WorldObjectInstanceTagSearch)
+    resp = search(['map', args['ns']])
+    if(len(resp.instances) > 0):
+        # check if we only found one (which should be the case)
+        if(len(resp.instances) > 1):
+            rospy.logwarn('Multiple world object instances tagged with "map" and "' + ns + 
+                          '". Defaulting to first result.')
+        # assign the ID
+        instance.pose.header.frame_id = resp.instances[0].instance_id
+    instance.pose.header.stamp = rospy.get_rostime()
     
-    entity.tags.append('room')
-    entity.tags.append(args['ns'])
+    # tag this as a room
+    instance.tags = ['room', args['ns']]
+    
+    # check if we already have a room with that pose and just update it
+    update = False
+    resp = search(instance.tags)
+    for i in resp.instances:
+        # check the pose information
+        if(i.pose.pose.pose == message.pose):
+            # create a handle and do the update
+            update = rospy.ServiceProxy('/world_model/update_world_object_instance',
+                                        UpdateWorldObjectInstance)
+            update(resp.instances[0].instance_id, instance)
+            return
+    
+    # no match found -- new instance
+    instance.name = args['ns'] + ' Un-named Room'
+    # room usually last a long time (six months)
+    instance.expected_ttl = rospy.Duration(60 * 60 * 24 * 178)
 
-    # create a handle and do the update
-    update_world = rospy.ServiceProxy('/world_model/update_world_model', UpdateWorldModel)
-    update_world(entity)
+    # create a handle and do the creation
+    create = rospy.ServiceProxy('/world_model/create_world_object_instance',
+                                CreateWorldObjectInstance)
+    create(instance)
 
 def main():
     '''
@@ -66,17 +76,19 @@ def main():
     '''
     rospy.init_node('room_listener')
     # wait for the world model node
-    rospy.loginfo('Waiting for /world_model/update_world_model to become available...')
-    rospy.wait_for_service('/world_model/update_world_model')
-    rospy.loginfo('Waiting for /world_model/search_world_model_entity_by_frame_id to become available...')
-    rospy.wait_for_service('/world_model/search_world_model_entity_by_frame_id')
+    rospy.loginfo('Waiting for /world_model/create_world_object_instance to become available...')
+    rospy.wait_for_service('/world_model/create_world_object_instance')
+    rospy.loginfo('Waiting for /world_model/update_world_object_instance to become available...')
+    rospy.wait_for_service('/world_model/update_world_object_instance')
+    rospy.loginfo('Waiting for /world_model/search_world_object_instance_tags to become available...')
+    rospy.wait_for_service('/world_model/search_world_object_instance_tags')
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/rooms')
     ns = rospy.get_param('~ns', 'my_robot')
 
     # subscribe to the topic
-    rospy.Subscriber(t, PolygonWithPose, polygon_cb, {'topic' : t, 'ns' : ns})
+    rospy.Subscriber(t, PolygonWithPose, polygon_cb, {'ns' : ns})
     
     rospy.loginfo('Room Listener is Ready!')
     rospy.spin()
