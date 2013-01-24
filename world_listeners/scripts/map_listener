@@ -53,7 +53,7 @@ def map_cb(message, args):
     
     @param message: the ROS message for the map
     @type  message: OccupancyGrid
-    @param args: name-space for this node
+    @param args: the namespace for this node
     @type  topic: dict
     '''
     # break up the message and store it

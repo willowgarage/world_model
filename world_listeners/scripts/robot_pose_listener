@@ -44,45 +44,67 @@ published and try to re-localize the robot upon startup.
 import rospy
 from world_msgs.srv import *
 from world_msgs.msg import *
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
+import socket
 
 def pose_cb(message, args):
     '''
-    Main callback for a pose topic. This will insert a new entity in the world model
-    or update an existing entity if one exists assuming the robot's map parent frame.
+    Main callback for a pose topic. This will insert a new entity in the world object instance 
+    database or update an existing entity if one exists with the same tags. 
     
     @param message: the ROS message for the pose
     @type  message: Pose
-    @param args: the topic name we are listening on and name-space for this node
+    @param args: the namespace for this node
     @type  topic: dict
     '''
-    entity = WorldModelEntity()
-    
     # break up the message and store it
-    entity.frame_id = args['ns'] + '_pose'
-    
-    entity.pose.pose.pose = message
-    entity.pose.header.frame_id = args['ns'] + '_map'
-    entity.pose.header.stamp = rospy.get_rostime()
-    
-    rel = WorldModelRelationship()
-    rel.header.frame_id = args['ns'] + '_map'
-    rel.header.stamp = rospy.get_rostime()
-    rel.rel = 'in'
-    entity.relationships.append(rel)
-    
-    observation = WorldModelObservation()
-    observation.type = 'topic'
-    observation.ref = args['topic']
-    entity.observations.append(observation)
-    
-    entity.tags.append('robot')
-    entity.tags.append(args['ns'])
+    instance = WorldObjectInstance()
 
-    # create a handle and do the update
-    update_world = rospy.ServiceProxy('/world_model/update_world_model', UpdateWorldModel)
-    update_world(entity)
+    # source information for this node
+    instance.source.origin = socket.gethostname()
+    instance.source.creator = 'robot_pose_listener'
     
+    # position information
+    instance.pose.pose.pose = message
+    # get our map ID
+    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
+                                WorldObjectInstanceTagSearch)
+    resp = search(['map', args['ns']])
+    if(len(resp.instances) > 0):
+        # check if we only found one (which should be the case)
+        if(len(resp.instances) > 1):
+            rospy.logwarn('Multiple world object instances tagged with "map" and "' + ns + 
+                          '". Defaulting to first result.')
+        # assign the ID
+        instance.pose.header.frame_id = resp.instances[0].instance_id
+    instance.pose.header.stamp = rospy.get_rostime()
+    
+    # tag this as a robot
+    instance.tags = ['robot', args['ns']]
+
+    # check if we already have a robot
+    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
+                                WorldObjectInstanceTagSearch)
+    resp = search(instance.tags)
+    if(len(resp.instances) > 0):
+        # check if we only found one (which should be the case)
+        if(len(resp.instances) > 1):
+            rospy.logwarn('Multiple world object instances tagged with "robot" and "' + ns + 
+                          '". Defaulting to first result.')
+        # create a handle and do the update
+        update = rospy.ServiceProxy('/world_model/update_world_object_instance',
+                                    UpdateWorldObjectInstance)
+        update(resp.instances[0].instance_id, instance)
+    else:
+        # new instance
+        instance.name = args['ns'] + ' Robot'
+        # robots usually are moving around
+        instance.expected_ttl = rospy.Duration(60)
+        # create a handle and do the creation
+        create = rospy.ServiceProxy('/world_model/create_world_object_instance',
+                                    CreateWorldObjectInstance)
+        create(instance)
+
     # don't update so quickly
     rospy.sleep(1.0)
 
@@ -104,21 +126,27 @@ def main():
     ns = rospy.get_param('~ns', 'my_robot')
     
     # check for an initial pose for this robot
-    search = rospy.ServiceProxy('/world_model/search_world_model_entity_by_frame_id', WorldModelEntityFrameIdSearch)
-    resp = search(ns + '_pose')
+    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
+                                WorldObjectInstanceTagSearch)
+    resp = search(['robot', ns])
     # check if we should send in an initial pose
-    if resp.exists:
-        pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped)
-        resp.entity.pose.header.frame_id = '/map'
-        # wait for the pose messages to become available so we know the localization node is up
+    if(len(resp.instances) > 0):
+        # check if we only found one (which should be the case)
+        if(len(resp.instances) > 1):
+            rospy.logwarn('Multiple world object instances tagged with "robot" and "' + ns + 
+                          '". Defaulting to first result.')
+        # wait for the navigation stack to come up
+        rospy.loginfo('Previous robot pose found. Waiting for ' + t + ' to become available...')
         rospy.wait_for_message(t, Pose)
-        # wait for someone to hear it
+        pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped)
         while pub.get_num_connections() < 1 and not rospy.is_shutdown():
             rospy.sleep(0.1)
-        pub.publish(resp.entity.pose)
+        localized = resp.instances[0].pose
+        localized.header.frame_id = '/map'
+        pub.publish(localized)
 
     # subscribe to the topic
-    rospy.Subscriber(t, Pose, pose_cb, {'topic' : t, 'ns' : ns})
+    rospy.Subscriber(t, Pose, pose_cb, {'ns' : ns})
     
     rospy.loginfo('Robot Pose Listener is Ready!')
     rospy.spin()
