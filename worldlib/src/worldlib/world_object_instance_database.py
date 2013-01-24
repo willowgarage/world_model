@@ -83,6 +83,18 @@ class WorldObjectInstanceDatabase(object):
         '''
         return self.db.find_one({'instance_id' : instance_id})
     
+    def search_tags(self, tags):
+        '''
+        Search for and return all entities in the world object instance database that contain the
+        given list of tags.
+        
+        @param tags: the list of tags to search for
+        @type  tags: list
+        @return: the entities found, or None
+        @rtype:  pymongo.cursor.Cursor
+        '''
+        return self.db.find({'tags' : {'$all' : tags}})
+    
     def get_world_object_instances(self):
         '''
         Return an array of all the world object instances in the database.

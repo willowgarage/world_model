@@ -34,13 +34,33 @@ def create_world_object_instance(request):
     instance_id = woid.insert(extract_values(request.instance))
     return CreateWorldObjectInstanceResponse(instance_id)
 
+def search_world_object_instance_tags(request):
+    '''
+    Search for and return all instances in the database that have the given list of tags.
+    
+    @param request: the service request
+    @type  request: WorldObjectInstanceTagSearch
+    @return: the service response
+    @rtype:  WorldObjectInstanceTagSearchResponse
+    '''
+    # convert into ROS messages
+    entities = woid.search_tags(request.tags)
+    instances = []
+    for e in entities:
+        del e['_id']
+        instances.append(populate_instance(e, WorldObjectInstance()))
+    return WorldObjectInstanceTagSearchResponse(instances)
+
 def main():
     '''
     The main run function for the world_model node.
     '''
     rospy.init_node('world_model')
     # advertise the services
-    rospy.Service('~create_world_object_instance', CreateWorldObjectInstance, create_world_object_instance)
+    rospy.Service('~create_world_object_instance', CreateWorldObjectInstance, 
+                  create_world_object_instance)
+    rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch, 
+                  search_world_object_instance_tags)
     rospy.loginfo('World Model Node is Ready')
     rospy.spin()
 
