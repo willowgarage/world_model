@@ -146,7 +146,7 @@ def main():
         pub.publish(localized)
 
     # subscribe to the topic
-    rospy.Subscriber(t, Pose, pose_cb, {'ns' : ns})
+    rospy.Subscriber(t, Pose, pose_cb, {'ns' : ns}, 1)
     
     rospy.loginfo('Robot Pose Listener is Ready!')
     rospy.spin()
