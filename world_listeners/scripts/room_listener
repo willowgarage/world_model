@@ -71,7 +71,7 @@ def polygon_cb(message, args):
     if(len(resp.instances) > 0):
         # check if we only found one (which should be the case)
         if(len(resp.instances) > 1):
-            rospy.logwarn('Multiple world object instances tagged with "map" and "' + ns + 
+            rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns'] + 
                           '". Defaulting to first result.')
         # assign the ID
         instance.pose.header.frame_id = resp.instances[0].instance_id

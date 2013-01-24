@@ -75,7 +75,7 @@ def map_cb(message, args):
     if(len(resp.instances) > 0):
         # check if we only found one (which should be the case)
         if(len(resp.instances) > 1):
-            rospy.logwarn('Multiple world object instances tagged with "map" and "' + ns + 
+            rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns'] + 
                           '". Defaulting to first result.')
         # create a handle and do the update
         update = rospy.ServiceProxy('/world_model/update_world_object_instance',
