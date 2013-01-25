@@ -2,7 +2,7 @@
 <package>
   <name>world_msgs</name>
   <version>0.0.1</version>
-  <description>Common messages to communicate with the world model database.</description>
+  <description>Common messages to communicate with the world model.</description>
 
   <maintainer email="rctoris@wpi.edu">Russell Toris</maintainer>
   <author email="rctoris@wpi.edu">Russell Toris</author>

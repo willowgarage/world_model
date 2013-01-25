@@ -1,3 +1,0 @@
-geometry_msgs/Polygon polygon
-geometry_msgs/Polygon bbox
-string markup

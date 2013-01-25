@@ -1,70 +1,96 @@
 #!/usr/bin/env python
 
+# Software License Agreement (BSD License)
+#
+# Copyright (c) 2013, Willow Garage, Inc.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# * Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above
+# copyright notice, this list of conditions and the following
+# disclaimer in the documentation and/or other materials provided
+# with the distribution.
+# * Neither the name of Willow Garage, Inc. nor the names of its
+# contributors may be used to endorse or promote products derived
+# from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+# COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 '''
-The map_listener node listens to a specified OccupancyGrid message
-and updates the world model accordingly.
+The map_listener node listens to a specified OccupancyGrid message and updates the world model
+accordingly.
 
 @author:  Russell Toris
-@version: January 17, 2013
+@version: January 23, 2013
 '''
 
 import rospy
 from nav_msgs.msg import OccupancyGrid
-from world_msgs.srv import UpdateWorldModel
-from world_msgs.msg import WorldModelEntity, WorldModelObservation
-from geometry_msgs.msg import Point32
+from world_msgs.srv import *
+from world_msgs.msg import WorldObjectInstance
+import socket
 
 def map_cb(message, args):
     '''
-    Main callback for a map topic. This will insert a new entity in the world model
-    or update an existing entity if one exists with the same name. 
+    Main callback for a map topic. This will insert a new entity in the world object instance 
+    database or update an existing entity if one exists with the same tags. 
     
     @param message: the ROS message for the map
     @type  message: OccupancyGrid
-    @param args: the topic name we are listening on and name-space for this node
+    @param args: the namespace for this node
     @type  topic: dict
     '''
-    entity = WorldModelEntity()
-    
     # break up the message and store it
-    entity.frame_id = args['ns'] + '_map'
-    
-    entity.pose.pose.pose = message.info.origin
-    entity.pose.header.stamp = message.header.stamp
-    
-    # add the bounding box
-    p0 = Point32()
-    p0.x = message.info.origin.position.x
-    p0.y = message.info.origin.position.y
-    p0.z = message.info.origin.position.z
-    p1 = Point32()
-    p1.x = message.info.origin.position.x + (message.info.resolution * message.info.width)
-    p1.y = message.info.origin.position.y
-    p1.z = message.info.origin.position.z
-    p2 = Point32()
-    p2.x = message.info.origin.position.x + (message.info.resolution * message.info.width)
-    p2.y = message.info.origin.position.y + (message.info.resolution * message.info.height)
-    p2.z = message.info.origin.position.z
-    p3 = Point32()
-    p3.x = message.info.origin.position.x
-    p3.y = message.info.origin.position.y + (message.info.resolution * message.info.height)
-    p3.z = message.info.origin.position.z
-    entity.description.bbox.points.append(p0)
-    entity.description.bbox.points.append(p1)
-    entity.description.bbox.points.append(p2)
-    entity.description.bbox.points.append(p3)
-    
-    observation = WorldModelObservation()
-    observation.type = 'topic'
-    observation.ref = args['topic']
-    entity.observations.append(observation)
-    
-    entity.tags.append('robot')
-    entity.tags.append(args['ns'])
+    instance = WorldObjectInstance()
 
-    # create a handle and do the update
-    update_world = rospy.ServiceProxy('/world_model/update_world_model', UpdateWorldModel)
-    update_world(entity)
+    # source information for this node
+    instance.source.origin = socket.gethostname()
+    instance.source.creator = 'map_listener'
+    
+    # position information
+    instance.pose.pose.pose = message.info.origin
+    
+    instance.tags = ['map', args['ns']]
+    
+    # check if we already have a map
+    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
+                                WorldObjectInstanceTagSearch)
+    resp = search(instance.tags)
+    if(len(resp.instances) > 0):
+        # check if we only found one (which should be the case)
+        if(len(resp.instances) > 1):
+            rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns'] + 
+                          '". Defaulting to first result.')
+        # create a handle and do the update
+        update = rospy.ServiceProxy('/world_model/update_world_object_instance',
+                                    UpdateWorldObjectInstance)
+        update(resp.instances[0].instance_id, instance)
+    else:
+        # new instance
+        instance.name = args['ns'] + ' Map'
+        # maps usually last a long time (on year)
+        instance.expected_ttl = rospy.Duration(60 * 60 * 24 * 356)
+    
+        # create a handle and do the creation
+        create = rospy.ServiceProxy('/world_model/create_world_object_instance',
+                                    CreateWorldObjectInstance)
+        create(instance)
 
 def main():
     '''
@@ -72,15 +98,20 @@ def main():
     '''
     rospy.init_node('map_listener')
     # wait for the world model node
-    rospy.loginfo('Waiting for /world_model/update_world_model to become available...')
-    rospy.wait_for_service('/world_model/update_world_model')
+    rospy.loginfo('Waiting for /world_model/create_world_object_instance to become available...')
+    rospy.wait_for_service('/world_model/create_world_object_instance')
+    rospy.loginfo('Waiting for /world_model/update_world_object_instance to become available...')
+    rospy.wait_for_service('/world_model/update_world_object_instance')
+    rospy.loginfo('Waiting for /world_model/search_world_object_instance_tags to become available...')
+    rospy.wait_for_service('/world_model/search_world_object_instance_tags')
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/map')
-    ns = rospy.get_param('~ns', 'robot')
-    # subscribe to the topic with a queue size of 1
-    rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns}, 1)
+    ns = rospy.get_param('~ns', 'my_robot')
     
+    # subscribe to the topic with a queue size of 1
+    rospy.Subscriber(t, OccupancyGrid, map_cb, {'ns' : ns}, 1)
+
     rospy.loginfo('Map Listener is Ready!')
     rospy.spin()
 
