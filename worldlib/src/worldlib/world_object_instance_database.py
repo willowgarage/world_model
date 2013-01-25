@@ -89,8 +89,7 @@ class WorldObjectInstanceDatabase(object):
         '''
         # check if that id exists and update it
         return self.db.find_and_modify({'instance_id' : instance_id}, {'$set' : entity}) is not None
-            
-        
+
     def search__id(self, _id):
         '''
         Search for and return the entity in the world object instance database with the given ID, 

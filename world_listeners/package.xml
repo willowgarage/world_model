@@ -17,8 +17,10 @@
   <build_depend>rospy</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>worldlib</build_depend>
+  <build_depend>rosbridge_library</build_depend>
 
   <run_depend>rospy</run_depend>
   <run_depend>nav_msgs</run_depend>
   <run_depend>worldlib</run_depend>
+  <run_depend>rosbridge_library</run_depend>
 </package>

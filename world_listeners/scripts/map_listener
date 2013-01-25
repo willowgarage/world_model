@@ -43,7 +43,8 @@ accordingly.
 import rospy
 from nav_msgs.msg import OccupancyGrid
 from world_msgs.srv import *
-from world_msgs.msg import WorldObjectInstance
+from world_msgs.msg import WorldObjectInstance, WorldObjectDescription, Description
+from rosbridge_library.internal.message_conversion import extract_values
 import socket
 
 def map_cb(message, args):
@@ -53,7 +54,7 @@ def map_cb(message, args):
     
     @param message: the ROS message for the map
     @type  message: OccupancyGrid
-    @param args: the namespace for this node
+    @param args: the topic and namespace for this node
     @type  topic: dict
     '''
     # break up the message and store it
@@ -86,11 +87,25 @@ def map_cb(message, args):
         instance.name = args['ns'] + ' Map'
         # maps usually last a long time (on year)
         instance.expected_ttl = rospy.Duration(60 * 60 * 24 * 356)
-    
+        
+        # create a description of the map using the occupancy grid
+        object_description = WorldObjectDescription()
+        description = Description()
+        description.type = 'nav_msgs/OccupancyGrid'
+        description.data = str(extract_values(message))
+        description.ref = args['topic']
+        description.tag = 'OccupancyGrid'
+        object_description.descriptions.append(description)
         # create a handle and do the creation
-        create = rospy.ServiceProxy('/world_model/create_world_object_instance',
-                                    CreateWorldObjectInstance)
-        create(instance)
+        create_description = rospy.ServiceProxy('/world_model/create_world_object_description',
+                                                CreateWorldObjectDescription)
+        response = create_description(object_description)
+        instance.description_id = response.description_id
+        
+        # create a handle and do the creation
+        create_instance = rospy.ServiceProxy('/world_model/create_world_object_instance',
+                                             CreateWorldObjectInstance)
+        create_instance(instance)
 
 def main():
     '''
@@ -102,13 +117,14 @@ def main():
     rospy.wait_for_service('/world_model/create_world_object_instance')
     rospy.wait_for_service('/world_model/update_world_object_instance')
     rospy.wait_for_service('/world_model/search_world_object_instance_tags')
+    rospy.wait_for_service('/world_model/create_world_object_description')
     
     # check for a topic to listen on
     t = rospy.get_param('~topic', '/map')
     ns = rospy.get_param('~ns', 'my_robot')
     
     # subscribe to the topic with a queue size of 1
-    rospy.Subscriber(t, OccupancyGrid, map_cb, {'ns' : ns}, 1)
+    rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns}, 1)
 
     rospy.loginfo('Map Listener is Ready!')
     rospy.spin()

@@ -40,13 +40,14 @@ The world_model node exposes the worldlib API over ROS topics and services.
 '''
 
 import rospy
-from worldlib import world_object_instance_database
+from worldlib import world_object_instance_database, world_object_description_database
 from world_msgs.srv import *
 from world_msgs.msg import WorldObjectInstance
 from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 
-# the connection to the database
+# the connection to the databases
 woid = world_object_instance_database.WorldObjectInstanceDatabase()
+wodd = world_object_description_database.WorldObjectDescriptionDatabase()
 
 def create_world_object_instance(request):
     '''
@@ -106,6 +107,20 @@ def search_world_object_instance_tags(request):
         instances.append(populate_instance(e, WorldObjectInstance()))
     return WorldObjectInstanceTagSearchResponse(instances)
 
+def create_world_object_description(request):
+    '''
+    The create_world_object_description service call will create a new description in the world 
+    object description database. A unique description_id will be assigned.
+    
+    @param request: the service request
+    @type  request: CreateWorldObjectDescription
+    @return: the service response
+    @rtype:  CreateWorldObjectDescriptionResponse
+    '''
+    # convert to JSON and insert
+    description_id = wodd.insert(extract_values(request.description))
+    return CreateWorldObjectDescriptionResponse(description_id)
+
 def main():
     '''
     The main run function for the world_model node.
@@ -118,6 +133,8 @@ def main():
                   search_world_object_instance_tags)
     rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance,
                   update_world_object_instance)
+    rospy.Service('~create_world_object_description', CreateWorldObjectDescription,
+                  create_world_object_description)
     rospy.loginfo('World Model Node is Ready')
     rospy.spin()
 
