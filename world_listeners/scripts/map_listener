@@ -37,7 +37,7 @@ The map_listener node listens to a specified OccupancyGrid message and updates t
 accordingly.
 
 @author:  Russell Toris
-@version: January 23, 2013
+@version: January 25, 2013
 '''
 
 import rospy
@@ -72,9 +72,9 @@ def map_cb(message, args):
     search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
                                 WorldObjectInstanceTagSearch)
     resp = search(instance.tags)
-    if(len(resp.instances) > 0):
+    if len(resp.instances) > 0:
         # check if we only found one (which should be the case)
-        if(len(resp.instances) > 1):
+        if len(resp.instances) > 1:
             rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns'] + 
                           '". Defaulting to first result.')
         # create a handle and do the update
@@ -98,11 +98,9 @@ def main():
     '''
     rospy.init_node('map_listener')
     # wait for the world model node
-    rospy.loginfo('Waiting for /world_model/create_world_object_instance to become available...')
+    rospy.loginfo('Waiting for world_model services to become available...')
     rospy.wait_for_service('/world_model/create_world_object_instance')
-    rospy.loginfo('Waiting for /world_model/update_world_object_instance to become available...')
     rospy.wait_for_service('/world_model/update_world_object_instance')
-    rospy.loginfo('Waiting for /world_model/search_world_object_instance_tags to become available...')
     rospy.wait_for_service('/world_model/search_world_object_instance_tags')
     
     # check for a topic to listen on

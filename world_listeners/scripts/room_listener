@@ -37,7 +37,7 @@ The room_listener node listens for PolygonWithPose messages and tags them as roo
 inside the namespace's internal map.
 
 @author:  Russell Toris
-@version: January 23, 2013
+@version: January 25, 2013
 '''
 
 import rospy
@@ -68,9 +68,9 @@ def polygon_cb(message, args):
     search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
                                 WorldObjectInstanceTagSearch)
     resp = search(['map', args['ns']])
-    if(len(resp.instances) > 0):
+    if len(resp.instances) > 0:
         # check if we only found one (which should be the case)
-        if(len(resp.instances) > 1):
+        if len(resp.instances) > 1:
             rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns'] + 
                           '". Defaulting to first result.')
         # assign the ID
@@ -85,7 +85,7 @@ def polygon_cb(message, args):
     resp = search(instance.tags)
     for i in resp.instances:
         # check the pose information
-        if(i.pose.pose.pose == message.pose):
+        if i.pose.pose.pose == message.pose:
             # create a handle and do the update
             update = rospy.ServiceProxy('/world_model/update_world_object_instance',
                                         UpdateWorldObjectInstance)
@@ -108,11 +108,9 @@ def main():
     '''
     rospy.init_node('room_listener')
     # wait for the world model node
-    rospy.loginfo('Waiting for /world_model/create_world_object_instance to become available...')
+    rospy.loginfo('Waiting for world_model services to become available...')
     rospy.wait_for_service('/world_model/create_world_object_instance')
-    rospy.loginfo('Waiting for /world_model/update_world_object_instance to become available...')
     rospy.wait_for_service('/world_model/update_world_object_instance')
-    rospy.loginfo('Waiting for /world_model/search_world_object_instance_tags to become available...')
     rospy.wait_for_service('/world_model/search_world_object_instance_tags')
     
     # check for a topic to listen on

@@ -36,7 +36,7 @@
 The world_model node exposes the worldlib API over ROS topics and services.
 
 @author:  Russell Toris
-@version: January 23, 2013
+@version: January 25, 2013
 '''
 
 import rospy
@@ -79,12 +79,12 @@ def update_world_object_instance(request):
     '''
     # update the update time
     request.instance.update = rospy.get_rostime()
-    # make sure to set the instance_id so it does not become blank
-    request.instance.instance_id = (request.instance_id)
+    # make sure to set the instance_id so it cannot be changed
+    request.instance.instance_id = request.instance_id
     # convert to JSON and update
     success = woid.update_entity_by_instance_id(request.instance_id, 
                                                 extract_values(request.instance))
-    if(success is not True):
+    if success is not True:
         rospy.logwarn(request.instance_id + ' could not be updated.')
 
     return UpdateWorldObjectInstanceResponse(success)
