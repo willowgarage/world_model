@@ -73,9 +73,9 @@ def pose_cb(message, args):
                                      0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                                      0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
     # get our map ID
-    map_search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
-                                    WorldObjectInstanceTagSearch)
-    map_resp = map_search(['map', args['ns']])
+    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
+                                WorldObjectInstanceTagSearch)
+    map_resp = search(['map', args['ns']])
     if(len(map_resp.instances) > 0):
         # check if we only found one (which should be the case)
         if(len(map_resp.instances) > 1):
@@ -89,9 +89,7 @@ def pose_cb(message, args):
     instance.tags = ['robot', args['ns']]
 
     # check if we already have a robot
-    robot_search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
-                                      WorldObjectInstanceTagSearch)
-    robot_resp = robot_search(instance.tags)
+    robot_resp = search(instance.tags)
     if(len(robot_resp.instances) > 0):
         # check if we only found one (which should be the case)
         if(len(robot_resp.instances) > 1):

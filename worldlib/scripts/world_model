@@ -69,7 +69,8 @@ def create_world_object_instance(request):
 def update_world_object_instance(request):
     '''
     The update_world_object_instance service call will update an instance in the world object 
-    instance database. The update time will be set to the current time.
+    instance database. The update time will be set to the current time. The instance_id cannot be
+    updated with this request.
     
     @param request: the service request
     @type  request: UpdateWorldObjectInstance
@@ -78,8 +79,11 @@ def update_world_object_instance(request):
     '''
     # update the update time
     request.instance.update = rospy.get_rostime()
+    # make sure to set the instance_id so it does not become blank
+    request.instance.instance_id = (request.instance_id)
     # convert to JSON and update
-    success = woid.update_entity_by_instance_id(request.instance_id, extract_values(request.instance))
+    success = woid.update_entity_by_instance_id(request.instance_id, 
+                                                extract_values(request.instance))
     if(success is not True):
         rospy.logwarn(request.instance_id + ' could not be updated.')
 
