@@ -41,6 +41,8 @@ Mongo world object description database.
 from pymongo import Connection
 from pymongo.objectid import ObjectId
 from gridfs import GridFS
+import StringIO
+import pickle
 
 class WorldObjectDescriptionDatabase(object):
     '''
@@ -79,7 +81,7 @@ class WorldObjectDescriptionDatabase(object):
         ptr = {}
         ptr['_id'] = _id
         ptr['description_id'] = description_id
-        ptr['file_id'] = self.fs.put(str(entity))
+        ptr['file_id'] = self.fs.put(pickle.dumps(entity))
         self.db.insert(ptr)
         # return the description_id
         return description_id
@@ -115,14 +117,20 @@ class WorldObjectDescriptionDatabase(object):
     def search_description_id(self, description_id):
         '''
         Search for and return the entity in the world object description database with the given 
-        description_id, if one exists.
+        description_id, if one exists. This will load the file and return the contents.
         
         @param description_id: the description_id field of the entity to search for
         @type  description_id: string
         @return: the entity found, or None if an invalid description_id was given
         @rtype:  dict
         '''
-        return self.db.find_one({'description_id' : description_id})
+        ptr = self.db.find_one({'description_id' : description_id})
+        if ptr is not None:
+            desc_file = self.fs.get(ptr['file_id'])
+            if desc_file is not None:
+                return pickle.loads(desc_file.read())
+        # no file found
+        return None
     
     def get_world_object_descriptions(self):
         '''

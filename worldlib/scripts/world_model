@@ -42,7 +42,7 @@ The world_model node exposes the worldlib API over ROS topics and services.
 import rospy
 from worldlib import world_object_instance_database, world_object_description_database
 from world_msgs.srv import *
-from world_msgs.msg import WorldObjectInstance
+from world_msgs.msg import WorldObjectInstance, WorldObjectDescription
 from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 
 # the connection to the databases
@@ -83,7 +83,7 @@ def update_world_object_instance(request):
     # make sure to set the instance_id so it cannot be changed
     request.instance.instance_id = request.instance_id
     # convert to JSON and update
-    success = woid.update_entity_by_instance_id(request.instance_id, 
+    success = woid.update_entity_by_instance_id(request.instance_id,
                                                 extract_values(request.instance))
     if success is not True:
         rospy.logwarn(request.instance_id + ' could not be updated.')
@@ -121,6 +121,22 @@ def create_world_object_description(request):
     description_id = wodd.insert(extract_values(request.description))
     return CreateWorldObjectDescriptionResponse(description_id)
 
+def get_world_object_description(request):
+    '''
+    The get_world_object_description service call will search for and return a world object 
+    description with the given description_id.
+    
+    @param request: the service request
+    @type  request: GetWorldObjectDescription
+    @return: the service response
+    @rtype:  GetWorldObjectDescriptionResponse
+    '''
+    entity = wodd.search_description_id(request.description_id)
+    description = WorldObjectDescription()
+    if entity is not None:
+        populate_instance(entity, description)
+    return GetWorldObjectDescriptionResponse(description, entity is not None)
+
 def main():
     '''
     The main run function for the world_model node.
@@ -135,6 +151,8 @@ def main():
                   update_world_object_instance)
     rospy.Service('~create_world_object_description', CreateWorldObjectDescription,
                   create_world_object_description)
+    rospy.Service('~get_world_object_description', GetWorldObjectDescription,
+                  get_world_object_description)
     rospy.loginfo('World Model Node is Ready')
     rospy.spin()
 
