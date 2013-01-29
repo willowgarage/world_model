@@ -35,7 +35,7 @@ The WorldObjectInstanceDatabase class provides functions to natively communicate
 world object instance database.
 
 @author:  Russell Toris
-@version: January 23, 2013
+@version: January 25, 2013
 '''
 
 from pymongo import Connection
@@ -49,7 +49,8 @@ class WorldObjectInstanceDatabase(object):
 
     def __init__(self):
         '''
-        Creates the Native object and connects to the world model database.
+        Creates the WorldObjectInstanceDatabase object and connects to the world object instance
+        database.
         '''
         # connect to the world model database
         self.mongo = Connection()
@@ -57,8 +58,8 @@ class WorldObjectInstanceDatabase(object):
         
     def insert(self, entity):
         '''
-        Insert the given entity into the world model database. This will create a new instance. The 
-        instance_id will be set to a unique value and returned.
+        Insert the given entity into the world object instance database. This will create a new 
+        instance. The instance_id will be set to a unique value and returned.
         
         @param entity: the entity to insert
         @type  entity: dict
@@ -87,9 +88,8 @@ class WorldObjectInstanceDatabase(object):
         @rtype:  bool
         '''
         # check if that id exists and update it
-        return (self.db.find_and_modify({'instance_id' : instance_id}, {'$set' : entity}) is not None)
-            
-        
+        return self.db.find_and_modify({'instance_id' : instance_id}, {'$set' : entity}) is not None
+
     def search__id(self, _id):
         '''
         Search for and return the entity in the world object instance database with the given ID, 

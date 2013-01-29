@@ -1,0 +1,7 @@
+# the description_id to get
+string description_id
+---
+world_msgs/WorldObjectDescription description
+# if a valid update was performed
+# set to true if the description_id was valid
+bool exists
