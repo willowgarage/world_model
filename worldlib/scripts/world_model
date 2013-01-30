@@ -36,36 +36,59 @@
 The world_model node exposes the worldlib API over ROS topics and services.
 
 @author:  Russell Toris
-@version: January 25, 2013
+@version: January 30, 2013
 '''
 
 import rospy
+import actionlib
 from worldlib import world_object_instance_database, world_object_description_database
+from worldlib.msg import *
 from world_msgs.srv import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription
 from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 
-# the connection to the databases
-woid = world_object_instance_database.WorldObjectInstanceDatabase()
-wodd = world_object_description_database.WorldObjectDescriptionDatabase()
+class WorldModel(object):
 
-def create_world_object_instance(request):
-    '''
-    The create_world_object_instance service call will create a new instance in the world object 
-    instance database. A unique instance_id will be assigned and the creation time will be created.
-    
-    @param request: the service request
-    @type  request: CreateWorldObjectInstance
-    @return: the service response
-    @rtype:  CreateWorldObjectInstanceResponse
-    '''
-    # update the times
-    t = rospy.get_rostime()
-    request.instance.creation = t
-    request.instance.update = t
-    # convert to JSON and insert
-    instance_id = woid.insert(extract_values(request.instance))
-    return CreateWorldObjectInstanceResponse(instance_id)
+    def __init__(self):
+        # the connection to the databases
+        self._woid = world_object_instance_database.WorldObjectInstanceDatabase()
+        self._wodd = world_object_description_database.WorldObjectDescriptionDatabase()
+        # advertise the action servers
+        self._cwoi = actionlib.SimpleActionServer('~create_world_object_instance', 
+                                                  CreateWorldObjectInstanceAction, 
+                                                  self.create_world_object_instance, False)
+        rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch,
+                      search_world_object_instance_tags)
+        rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance,
+                      update_world_object_instance)
+        rospy.Service('~create_world_object_description', CreateWorldObjectDescription,
+                      create_world_object_description)
+        rospy.Service('~get_world_object_description', GetWorldObjectDescription,
+                      get_world_object_description)
+        rospy.loginfo('World Model Node is Ready')
+        # start the action servers
+        self._cwoi.start()
+
+
+    def create_world_object_instance(self, goal):
+        '''
+        The create_world_object_instance action server will create a new instance in the world object 
+        instance database. A unique instance_id will be assigned and the creation time will be set.
+        
+        @param goal: the goal containing the instance to insert into the database
+        @type  goal: CreateWorldObjectInstanceAction
+        '''
+        # update the times
+        t = rospy.get_rostime()
+        goal.instance.creation = t
+        goal.instance.update = t
+        # convert to a dict and insert
+        instance_id = woid.insert(extract_values(goal.instance))
+        # send the response
+        result = CreateWorldObjectInstanceResult()
+        result.instance_id = instance_id
+        
+        return CreateWorldObjectInstanceResponse(instance_id)
 
 def update_world_object_instance(request):
     '''
@@ -142,18 +165,8 @@ def main():
     The main run function for the world_model node.
     '''
     rospy.init_node('world_model')
-    # advertise the services
-    rospy.Service('~create_world_object_instance', CreateWorldObjectInstance,
-                  create_world_object_instance)
-    rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch,
-                  search_world_object_instance_tags)
-    rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance,
-                  update_world_object_instance)
-    rospy.Service('~create_world_object_description', CreateWorldObjectDescription,
-                  create_world_object_description)
-    rospy.Service('~get_world_object_description', GetWorldObjectDescription,
-                  get_world_object_description)
-    rospy.loginfo('World Model Node is Ready')
+    # create the object to handle everything
+    WorldModel()
     rospy.spin()
 
 if __name__ == '__main__':
