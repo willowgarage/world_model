@@ -59,28 +59,28 @@ class WorldModel(object):
         self._woid = world_object_instance_database.WorldObjectInstanceDatabase()
         self._wodd = world_object_description_database.WorldObjectDescriptionDatabase()
         # advertise the action servers
-        self._cwoi = actionlib.SimpleActionServer('~create_world_object_instance',
+        self._cwoi = actionlib.SimpleActionServer('/world_model/create_world_object_instance',
                                                   CreateWorldObjectInstanceAction,
                                                   self.create_world_object_instance, False)
-        self._uwoi = actionlib.SimpleActionServer('~update_world_object_instance',
+        self._uwoi = actionlib.SimpleActionServer('/world_model/update_world_object_instance',
                                                   UpdateWorldObjectInstanceAction,
                                                   self.update_world_object_instance, False)
-        self._woits = actionlib.SimpleActionServer('~world_object_instance_tag_search',
-                                                   UpdateWorldObjectInstanceAction,
+        self._woits = actionlib.SimpleActionServer('/world_model/world_object_instance_tag_search',
+                                                   WorldObjectInstanceTagSearchAction,
                                                    self.world_object_instance_tag_search, False)
-        self._cwod = actionlib.SimpleActionServer('~create_world_object_description',
+        self._cwod = actionlib.SimpleActionServer('/world_model/create_world_object_description',
                                                   CreateWorldObjectDescriptionAction,
                                                   self.create_world_object_description, False)
-        self._gwod = actionlib.SimpleActionServer('~get_world_object_description',
+        self._gwod = actionlib.SimpleActionServer('/world_model/get_world_object_description',
                                                   GetWorldObjectDescriptionAction,
                                                   self.get_world_object_description, False)
-        rospy.loginfo('World Model Node is Ready')
         # start the action servers
         self._cwoi.start()
         self._uwoi.start()
         self._woits.start()
         self._cwod.start()
         self._gwod.start()
+        rospy.loginfo('World Model Node is Ready')
 
     def create_world_object_instance(self, goal):
         '''
@@ -96,14 +96,13 @@ class WorldModel(object):
         goal.instance.creation = t
         goal.instance.update = t
         # convert to a dict and insert
-        instance_id = woid.insert(extract_values(goal.instance))
+        instance_id = self._woid.insert(extract_values(goal.instance))
         # put the instance_id into the response
-        result = CreateWorldObjectInstanceResult()
-        result.instance_id = instance_id
+        result = CreateWorldObjectInstanceResult(instance_id)
         # send the response
         self._cwoi.set_succeeded(result, 'Success')
     
-    def update_world_object_instance(goal):
+    def update_world_object_instance(self, goal):
         '''
         The update_world_object_instance action server will update an instance in the world object 
         instance database. The update time will be set to the current time. The instance_id cannot 
@@ -125,12 +124,11 @@ class WorldModel(object):
         else:
             response = 'Success'
         # put the result into the response
-        result = UpdateWorldObjectInstanceResult()
-        result.success = success
+        result = UpdateWorldObjectInstanceResult(success)
         # send the response
         self._uwoi.set_succeeded(result, response)
         
-    def world_object_instance_tag_search(goal):
+    def world_object_instance_tag_search(self, goal):
         '''
         The world_object_instance_tag_search action server will search for all instances in the 
         database that have the given list of tags.
@@ -139,19 +137,18 @@ class WorldModel(object):
         @type  goal: WorldObjectInstanceTagSearchGoal
         '''
         # search for all of the tags
-        entities = woid.search_tags(goal.tags)
+        entities = self._woid.search_tags(goal.tags)
         instances = []
         # parse out the data
         for e in entities:
             del e['_id']
             instances.append(populate_instance(e, WorldObjectInstance()))
         # put the instances into the response
-        result = WorldObjectInstanceTagSearchResult()
-        result.instances = instances
+        result = WorldObjectInstanceTagSearchResult(instances)
         # send the response
         self._woits.set_succeeded(result, 'Success')
 
-    def create_world_object_description(goal):
+    def create_world_object_description(self, goal):
         '''
         The create_world_object_description action server will create a new description in the world 
         object description database. A unique description_id will be assigned.
@@ -160,14 +157,13 @@ class WorldModel(object):
         @type  goal: CreateWorldObjectDescriptionGoal
         '''
         # convert to a dict and insert
-        description_id = wodd.insert(extract_values(goal.description))
+        description_id = self._wodd.insert(extract_values(goal.description))
         # put the description_id into the response
-        result = CreateWorldObjectDescriptionResult()
-        result.description_id = description_id
+        result = CreateWorldObjectDescriptionResult(description_id)
         # send the response
         self._cwod.set_succeeded(result, 'Success')
         
-    def get_world_object_description(goal):
+    def get_world_object_description(self, goal):
         '''
         The get_world_object_description action server will search for and return a world object 
         description with the given description_id.
@@ -186,9 +182,7 @@ class WorldModel(object):
         else:
             response = goal.description_id + ' not found.'
         # put the result into the response
-        result = GetWorldObjectDescriptionResult()
-        result.description = description
-        result.exists = exists
+        result = GetWorldObjectDescriptionResult(description, exists)
         # send the response
         self._gwod.set_succeeded(result, response)
 
