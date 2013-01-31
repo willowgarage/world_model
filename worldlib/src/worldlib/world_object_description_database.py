@@ -41,7 +41,6 @@ Mongo world object description database.
 from pymongo import Connection
 from pymongo.objectid import ObjectId
 from gridfs import GridFS
-import StringIO
 import pickle
 
 class WorldObjectDescriptionDatabase(object):

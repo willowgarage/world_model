@@ -48,7 +48,10 @@ from world_msgs.msg import WorldObjectInstance, WorldObjectDescription
 from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 
 class WorldModel(object):
-
+    '''
+    The main WorldModel object which bridges the worldlib API to ROS action servers.
+    '''
+    
     def __init__(self):
         # the connection to the databases
         self._woid = world_object_instance_database.WorldObjectInstanceDatabase()
@@ -57,23 +60,26 @@ class WorldModel(object):
         self._cwoi = actionlib.SimpleActionServer('~create_world_object_instance', 
                                                   CreateWorldObjectInstanceAction, 
                                                   self.create_world_object_instance, False)
+        self._cwod = actionlib.SimpleActionServer('~create_world_object_description', 
+                                                  CreateWorldObjectDescriptionAction, 
+                                                  self.create_world_object_description, False)
         rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch,
                       search_world_object_instance_tags)
         rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance,
                       update_world_object_instance)
-        rospy.Service('~create_world_object_description', CreateWorldObjectDescription,
-                      create_world_object_description)
         rospy.Service('~get_world_object_description', GetWorldObjectDescription,
                       get_world_object_description)
         rospy.loginfo('World Model Node is Ready')
         # start the action servers
         self._cwoi.start()
+        self._cwod.start()
 
 
     def create_world_object_instance(self, goal):
         '''
-        The create_world_object_instance action server will create a new instance in the world object 
-        instance database. A unique instance_id will be assigned and the creation time will be set.
+        The create_world_object_instance action server will create a new instance in the world 
+        object instance database. A unique instance_id will be assigned and the creation time will 
+        be set.
         
         @param goal: the goal containing the instance to insert into the database
         @type  goal: CreateWorldObjectInstanceAction
@@ -84,11 +90,28 @@ class WorldModel(object):
         goal.instance.update = t
         # convert to a dict and insert
         instance_id = woid.insert(extract_values(goal.instance))
-        # send the response
+        # put the instance_id into the response
         result = CreateWorldObjectInstanceResult()
         result.instance_id = instance_id
+        # send the response
+        self._cwoi.set_succeeded(result, 'Success')
+    
+    
+    def create_world_object_description(goal):
+        '''
+        The create_world_object_description action server will create a new description in the world 
+        object description database. A unique description_id will be assigned.
         
-        return CreateWorldObjectInstanceResponse(instance_id)
+        @param goal: the goal containing the description to insert into the database
+        @type  goal: CreateWorldObjectDescriptionAction
+        '''
+        # convert to a dict and insert
+        description_id = wodd.insert(extract_values(goal.description))
+        # put the description_id into the response
+        result = CreateWorldObjectDescriptionResult()
+        result.description_id = description_id
+        # send the response
+        self._cwod.set_succeeded(result, 'Success')
 
 def update_world_object_instance(request):
     '''
@@ -129,20 +152,6 @@ def search_world_object_instance_tags(request):
         del e['_id']
         instances.append(populate_instance(e, WorldObjectInstance()))
     return WorldObjectInstanceTagSearchResponse(instances)
-
-def create_world_object_description(request):
-    '''
-    The create_world_object_description service call will create a new description in the world 
-    object description database. A unique description_id will be assigned.
-    
-    @param request: the service request
-    @type  request: CreateWorldObjectDescription
-    @return: the service response
-    @rtype:  CreateWorldObjectDescriptionResponse
-    '''
-    # convert to JSON and insert
-    description_id = wodd.insert(extract_values(request.description))
-    return CreateWorldObjectDescriptionResponse(description_id)
 
 def get_world_object_description(request):
     '''

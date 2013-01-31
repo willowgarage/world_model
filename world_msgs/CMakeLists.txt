@@ -25,7 +25,6 @@ add_service_files(
   FILES
   CreateWorldObjectInstance.srv
   WorldObjectInstanceTagSearch.srv
-  CreateWorldObjectDescription.srv
   GetWorldObjectDescription.srv
 )
 
