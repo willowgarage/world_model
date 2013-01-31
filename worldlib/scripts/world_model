@@ -43,7 +43,6 @@ import rospy
 import actionlib
 from worldlib import world_object_instance_database, world_object_description_database
 from worldlib.msg import *
-from world_msgs.srv import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription
 from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 
@@ -60,20 +59,21 @@ class WorldModel(object):
         self._cwoi = actionlib.SimpleActionServer('~create_world_object_instance', 
                                                   CreateWorldObjectInstanceAction, 
                                                   self.create_world_object_instance, False)
+        self._uwoi = actionlib.SimpleActionServer('~update_world_object_instance', 
+                                                  UpdateWorldObjectInstanceAction, 
+                                                  self.update_world_object_instance, False)
         self._cwod = actionlib.SimpleActionServer('~create_world_object_description', 
                                                   CreateWorldObjectDescriptionAction, 
                                                   self.create_world_object_description, False)
-        rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch,
-                      search_world_object_instance_tags)
-        rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance,
-                      update_world_object_instance)
-        rospy.Service('~get_world_object_description', GetWorldObjectDescription,
-                      get_world_object_description)
+        #rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch,
+        #              search_world_object_instance_tags)
+        #rospy.Service('~get_world_object_description', GetWorldObjectDescription,
+        #              get_world_object_description)
         rospy.loginfo('World Model Node is Ready')
         # start the action servers
         self._cwoi.start()
+        self._uwoi.start()
         self._cwod.start()
-
 
     def create_world_object_instance(self, goal):
         '''
@@ -96,7 +96,35 @@ class WorldModel(object):
         # send the response
         self._cwoi.set_succeeded(result, 'Success')
     
-    
+    def update_world_object_instance(goal):
+        '''
+        The update_world_object_instance action server will update an instance in the world object 
+        instance database. The update time will be set to the current time. The instance_id cannot 
+        be updated with this request.
+        
+        @param goal: the goal containing the instance to update in the database
+        @type  goal: UpdateWorldObjectInstance
+        '''
+        # update the update time
+        goal.instance.update = rospy.get_rostime()
+        # make sure to set the instance_id so it cannot be changed
+        goal.instance.instance_id = goal.instance_id
+        # convert to a dict and update
+        success = self._woid.update_entity_by_instance_id(goal.instance_id,
+                                                          extract_values(goal.instance))
+        if success is not True:
+            rospy.logwarn(request.instance_id + ' could not be updated.')
+            response = request.instance_id + ' could not be updated. Is the instance_id valid?'
+        else:
+            response = 'Success'
+        # put the result into the response
+        result = UpdateWorldObjectInstanceResult()
+        result.success = success
+        # send the response
+        self._cwoi.set_succeeded(result, response)
+        
+        return UpdateWorldObjectInstanceResponse(success)
+
     def create_world_object_description(goal):
         '''
         The create_world_object_description action server will create a new description in the world 
@@ -112,29 +140,6 @@ class WorldModel(object):
         result.description_id = description_id
         # send the response
         self._cwod.set_succeeded(result, 'Success')
-
-def update_world_object_instance(request):
-    '''
-    The update_world_object_instance service call will update an instance in the world object 
-    instance database. The update time will be set to the current time. The instance_id cannot be
-    updated with this request.
-    
-    @param request: the service request
-    @type  request: UpdateWorldObjectInstance
-    @return: the service response
-    @rtype:  UpdateWorldObjectInstanceResponse
-    '''
-    # update the update time
-    request.instance.update = rospy.get_rostime()
-    # make sure to set the instance_id so it cannot be changed
-    request.instance.instance_id = request.instance_id
-    # convert to JSON and update
-    success = woid.update_entity_by_instance_id(request.instance_id,
-                                                extract_values(request.instance))
-    if success is not True:
-        rospy.logwarn(request.instance_id + ' could not be updated.')
-
-    return UpdateWorldObjectInstanceResponse(success)
 
 def search_world_object_instance_tags(request):
     '''
