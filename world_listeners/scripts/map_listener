@@ -67,14 +67,11 @@ class MapListener(object):
                                                    WorldObjectInstanceTagSearchAction)
         self._cwod = actionlib.SimpleActionClient('/world_model/create_world_object_description',
                                                   CreateWorldObjectDescriptionAction)
-        self._gwod = actionlib.SimpleActionClient('/world_model/get_world_object_description',
-                                                  GetWorldObjectDescriptionAction)
         # wait for the action servers
         self._cwoi.wait_for_server()
         self._uwoi.wait_for_server()
         self._woits.wait_for_server()
         self._cwod.wait_for_server()
-        self._gwod.wait_for_server()
         # check for a topic to listen on
         t = rospy.get_param('~topic', '/map')
         ns = rospy.get_param('~ns', 'my_robot')
