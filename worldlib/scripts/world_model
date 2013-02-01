@@ -65,9 +65,10 @@ class WorldModel(object):
         self._uwoi = actionlib.SimpleActionServer('/world_model/update_world_object_instance',
                                                   UpdateWorldObjectInstanceAction,
                                                   self.update_world_object_instance, False)
-        self._woits = actionlib.SimpleActionServer('/world_model/world_object_instance_tag_search',
+        self._woits = actionlib.ActionServer('/world_model/world_object_instance_tag_search',
                                                    WorldObjectInstanceTagSearchAction,
-                                                   self.world_object_instance_tag_search, False)
+                                                   self.world_object_instance_tag_search,
+                                                   auto_start=False)
         self._cwod = actionlib.SimpleActionServer('/world_model/create_world_object_description',
                                                   CreateWorldObjectDescriptionAction,
                                                   self.create_world_object_description, False)
@@ -128,14 +129,16 @@ class WorldModel(object):
         # send the response
         self._uwoi.set_succeeded(result, response)
         
-    def world_object_instance_tag_search(self, goal):
+    def world_object_instance_tag_search(self, gh):
         '''
         The world_object_instance_tag_search action server will search for all instances in the 
         database that have the given list of tags.
         
-        @param goal: the goal containing the instance to update in the database
-        @type  goal: WorldObjectInstanceTagSearchGoal
+        @param gh: the goal containing the instance to update in the database
+        @type  gh: ServerGoalHandle
         '''
+        gh.set_accepted()
+        goal = gh.get_goal()
         # search for all of the tags
         entities = self._woid.search_tags(goal.tags)
         instances = []
@@ -146,7 +149,7 @@ class WorldModel(object):
         # put the instances into the response
         result = WorldObjectInstanceTagSearchResult(instances)
         # send the response
-        self._woits.set_succeeded(result, 'Success')
+        gh.set_succeeded(result, 'Success')
 
     def create_world_object_description(self, goal):
         '''
