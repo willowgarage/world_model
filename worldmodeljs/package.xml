@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package>
+  <name>worldmodeljs</name>
+  <version>0.0.1</version>
+  <description>World model Javascript interface.</description>
+
+  <maintainer email="rctoris@wpi.edu">Russell Toris</maintainer>
+  <author email="rctoris@wpi.edu">Russell Toris</author>
+
+  <license>BSD</license>
+
+  <url type="website">http://ros.org/wiki/worldmodeljs</url>
+  <url type="bugtracker">https://github.com/willowgarage/worldmodeljs/issues</url>
+  <url type="repository">https://github.com/willowgarage/worldmodeljs</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>
