@@ -5,3 +5,4 @@ world_msgs/WorldObjectInstance instance
 ---
 # if a valid update was performed
 bool success
+---

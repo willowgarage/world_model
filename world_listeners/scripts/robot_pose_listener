@@ -38,119 +38,129 @@ and updates the world model accordingly. This node will also wait for the robot 
 published and try to re-localize the robot upon startup.
 
 @author:  Russell Toris
-@version: January 25, 2013
+@version: January 31, 2013
 '''
 
 import rospy
-from world_msgs.srv import *
+import actionlib
+from worldlib.msg import *
 from world_msgs.msg import *
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 import socket
 
-def pose_cb(message, args):
+class RobotPoseListener(object):
     '''
-    Main callback for a pose topic. This will insert a new entity in the world object instance 
-    database or update an existing entity if one exists with the same tags. 
-    
-    @param message: the ROS message for the pose
-    @type  message: Pose
-    @param args: the namespace for this node
-    @type  topic: dict
+    The main RobotPoseListener object adds/updates the robot's pose in the world model.
     '''
-    # break up the message and store it
-    instance = WorldObjectInstance()
-
-    # source information for this node
-    instance.source.origin = socket.gethostname()
-    instance.source.creator = 'robot_pose_listener'
     
-    # position information
-    instance.pose.pose.pose = message
-    instance.pose.pose.covariance = [0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                     0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
-                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
-    # get our map ID
-    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
-                                WorldObjectInstanceTagSearch)
-    map_resp = search(['map', args['ns']])
-    if len(map_resp.instances) > 0:
-        # check if we only found one (which should be the case)
-        if len(map_resp.instances) > 1:
-            rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns'] + 
-                          '". Defaulting to first result.')
-        # assign the ID
-        instance.pose.header.frame_id = map_resp.instances[0].instance_id
-    instance.pose.header.stamp = rospy.get_rostime()
-    
-    # tag this as a robot
-    instance.tags = ['robot', args['ns']]
+    def __init__(self):
+        '''
+        Create the RobotPoseListener to listen to a pose topic and update the world model 
+        accordingly.
+        '''
+        # create a connection to the action servers we need
+        rospy.loginfo('Waiting for world_model action servers to become available...')
+        self._cwoi = actionlib.SimpleActionClient('/world_model/create_world_object_instance',
+                                                  CreateWorldObjectInstanceAction)
+        self._uwoi = actionlib.SimpleActionClient('/world_model/update_world_object_instance',
+                                                  UpdateWorldObjectInstanceAction)
+        self._woits = actionlib.SimpleActionClient('/world_model/world_object_instance_tag_search',
+                                                   WorldObjectInstanceTagSearchAction)
+        # wait for the action servers
+        self._cwoi.wait_for_server()
+        self._uwoi.wait_for_server()
+        self._woits.wait_for_server()
+        # check for a topic to listen on
+        t = rospy.get_param('~topic', '/robot_pose')
+        ns = rospy.get_param('~ns', 'my_robot')
+        # check for an initial pose for this robot
+        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(['robot', ns]))
+        resp = self._woits.get_result()
+        # check if we should send in an initial pose
+        if len(resp.instances) > 0:
+            # check if we only found one (which should be the case)
+            if len(resp.instances) > 1:
+                rospy.logwarn('Multiple world object instances tagged with "robot" and "' + ns + 
+                              '". Defaulting to first result.')
+            # wait for the navigation stack to come up
+            rospy.loginfo('Previous robot pose found. Waiting for ' + t + ' to become available...')
+            rospy.wait_for_message(t, Pose)
+            pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped)
+            #while pub.get_num_connections() < 1 and not rospy.is_shutdown():
+            #    rospy.sleep(0.1)
+            localized = resp.instances[0].pose
+            localized.header.frame_id = '/map'
+            pub.publish(localized)
+        # subscribe to the topic
+        rospy.Subscriber(t, Pose, self.pose_cb, {'ns' : ns}, 1)
+        rospy.loginfo('Robot Pose Listener is Ready!')
 
-    # check if we already have a robot
-    robot_resp = search(instance.tags)
-    if len(robot_resp.instances) > 0:
-        # check if we only found one (which should be the case)
-        if len(robot_resp.instances) > 1:
-            rospy.logwarn('Multiple world object instances tagged with "robot" and "' + args['ns'] + 
-                          '". Defaulting to first result.')
-        # create a handle and do the update
-        update = rospy.ServiceProxy('/world_model/update_world_object_instance',
-                                    UpdateWorldObjectInstance)
-        update(robot_resp.instances[0].instance_id, instance)
-    else:
-        # new instance
-        instance.name = args['ns'] + ' Robot'
-        # robots usually are moving around
-        instance.expected_ttl = rospy.Duration(60)
-        # create a handle and do the creation
-        create = rospy.ServiceProxy('/world_model/create_world_object_instance',
-                                    CreateWorldObjectInstance)
-        create(instance)
-
-    # don't update so quickly
-    rospy.sleep(1.0)
+    def pose_cb(self, message, args):
+        '''
+        Main callback for a pose topic. This will insert a new entity in the world object instance 
+        database or update an existing entity if one exists with the same tags. 
+        
+        @param message: the ROS message for the pose
+        @type  message: Pose
+        @param args: the namespace for this node
+        @type  topic: dict
+        '''
+        # don't update so quickly
+        rate = rospy.Rate(1)
+        # break up the message and store it
+        instance = WorldObjectInstance()
+        # source information for this node
+        instance.source.origin = socket.gethostname()
+        instance.source.creator = 'robot_pose_listener'
+        # position information
+        instance.pose.pose.pose = message
+        # default belief state
+        instance.pose.pose.covariance = [0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
+        # get our map ID
+        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(['map', args['ns']]))
+        map_resp = self._woits.get_result()
+        if len(map_resp.instances) > 0:
+            # check if we only found one (which should be the case)
+            if len(map_resp.instances) > 1:
+                rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns']
+                              + '". Defaulting to first result.')
+            # assign the ID
+            instance.pose.header.frame_id = map_resp.instances[0].instance_id
+        instance.pose.header.stamp = rospy.get_rostime()
+        # tag this as a robot
+        instance.tags = ['robot', args['ns']]
+        # check if we already have a robot
+        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(instance.tags))
+        robot_resp = self._woits.get_result()
+        if len(robot_resp.instances) > 0:
+            # check if we only found one (which should be the case)
+            if len(robot_resp.instances) > 1:
+                rospy.logwarn('Multiple world object instances tagged with "robot" and "' + 
+                              args['ns'] + '". Defaulting to first result.')
+            # create a goal and do the update
+            self._uwoi.send_goal(UpdateWorldObjectInstanceGoal(robot_resp.instances[0].instance_id,
+                                                               instance))
+        else:
+            # new instance
+            instance.name = args['ns'] + ' Robot'
+            # robots usually are moving around
+            instance.expected_ttl = rospy.Duration(60)
+            # create a goal and do the instance creation
+            self._cwoi.send_goal(CreateWorldObjectInstanceGoal(instance))
+        # don't update so quickly
+        rate.sleep()
 
 def main():
     '''
     The main run function for the robot_pose_listener node.
     '''
     rospy.init_node('robot_pose_listener')
-    # wait for the world model node
-    rospy.loginfo('Waiting for world_model services to become available...')
-    rospy.wait_for_service('/world_model/create_world_object_instance')
-    rospy.wait_for_service('/world_model/update_world_object_instance')
-    rospy.wait_for_service('/world_model/search_world_object_instance_tags')
-    
-    # check for a topic to listen on
-    t = rospy.get_param('~topic', '/robot_pose')
-    ns = rospy.get_param('~ns', 'my_robot')
-    
-    # check for an initial pose for this robot
-    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
-                                WorldObjectInstanceTagSearch)
-    resp = search(['robot', ns])
-    # check if we should send in an initial pose
-    if len(resp.instances) > 0:
-        # check if we only found one (which should be the case)
-        if len(resp.instances) > 1:
-            rospy.logwarn('Multiple world object instances tagged with "robot" and "' + ns + 
-                          '". Defaulting to first result.')
-        # wait for the navigation stack to come up
-        rospy.loginfo('Previous robot pose found. Waiting for ' + t + ' to become available...')
-        rospy.wait_for_message(t, Pose)
-        pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped)
-        while pub.get_num_connections() < 1 and not rospy.is_shutdown():
-            rospy.sleep(0.1)
-        localized = resp.instances[0].pose
-        localized.header.frame_id = '/map'
-        pub.publish(localized)
-
-    # subscribe to the topic
-    rospy.Subscriber(t, Pose, pose_cb, {'ns' : ns}, 1)
-    
-    rospy.loginfo('Robot Pose Listener is Ready!')
+    RobotPoseListener()
     rospy.spin()
 
 if __name__ == '__main__':

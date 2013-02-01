@@ -20,16 +20,6 @@ add_message_files(
   WorldObjectDescription.msg
 )
 
-## Generate services in the 'srv' folder
-add_service_files(
-  FILES
-  CreateWorldObjectInstance.srv
-  WorldObjectInstanceTagSearch.srv
-  UpdateWorldObjectInstance.srv
-  CreateWorldObjectDescription.srv
-  GetWorldObjectDescription.srv
-)
-
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES

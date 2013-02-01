@@ -36,124 +36,163 @@
 The world_model node exposes the worldlib API over ROS topics and services.
 
 @author:  Russell Toris
-@version: January 25, 2013
+@version: January 30, 2013
 '''
 
 import rospy
+import actionlib
 from worldlib import world_object_instance_database, world_object_description_database
-from world_msgs.srv import *
+from worldlib.msg import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription
 from rosbridge_library.internal.message_conversion import extract_values, populate_instance
 
-# the connection to the databases
-woid = world_object_instance_database.WorldObjectInstanceDatabase()
-wodd = world_object_description_database.WorldObjectDescriptionDatabase()
-
-def create_world_object_instance(request):
+class WorldModel(object):
     '''
-    The create_world_object_instance service call will create a new instance in the world object 
-    instance database. A unique instance_id will be assigned and the creation time will be created.
+    The main WorldModel object which bridges the worldlib API to ROS action servers.
+    '''
     
-    @param request: the service request
-    @type  request: CreateWorldObjectInstance
-    @return: the service response
-    @rtype:  CreateWorldObjectInstanceResponse
-    '''
-    # update the times
-    t = rospy.get_rostime()
-    request.instance.creation = t
-    request.instance.update = t
-    # convert to JSON and insert
-    instance_id = woid.insert(extract_values(request.instance))
-    return CreateWorldObjectInstanceResponse(instance_id)
+    def __init__(self):
+        '''
+        Creates and starts all action servers for the world model.
+        '''
+        # the connection to the databases
+        self._woid = world_object_instance_database.WorldObjectInstanceDatabase()
+        self._wodd = world_object_description_database.WorldObjectDescriptionDatabase()
+        # advertise the action servers
+        self._cwoi = actionlib.SimpleActionServer('/world_model/create_world_object_instance',
+                                                  CreateWorldObjectInstanceAction,
+                                                  self.create_world_object_instance, False)
+        self._uwoi = actionlib.SimpleActionServer('/world_model/update_world_object_instance',
+                                                  UpdateWorldObjectInstanceAction,
+                                                  self.update_world_object_instance, False)
+        self._woits = actionlib.SimpleActionServer('/world_model/world_object_instance_tag_search',
+                                                   WorldObjectInstanceTagSearchAction,
+                                                   self.world_object_instance_tag_search, False)
+        self._cwod = actionlib.SimpleActionServer('/world_model/create_world_object_description',
+                                                  CreateWorldObjectDescriptionAction,
+                                                  self.create_world_object_description, False)
+        self._gwod = actionlib.SimpleActionServer('/world_model/get_world_object_description',
+                                                  GetWorldObjectDescriptionAction,
+                                                  self.get_world_object_description, False)
+        # start the action servers
+        self._cwoi.start()
+        self._uwoi.start()
+        self._woits.start()
+        self._cwod.start()
+        self._gwod.start()
+        rospy.loginfo('World Model Node is Ready')
 
-def update_world_object_instance(request):
-    '''
-    The update_world_object_instance service call will update an instance in the world object 
-    instance database. The update time will be set to the current time. The instance_id cannot be
-    updated with this request.
+    def create_world_object_instance(self, goal):
+        '''
+        The create_world_object_instance action server will create a new instance in the world 
+        object instance database. A unique instance_id will be assigned and the creation time will 
+        be set.
+        
+        @param goal: the goal containing the instance to insert into the database
+        @type  goal: CreateWorldObjectInstanceGoal
+        '''
+        # update the times
+        t = rospy.get_rostime()
+        goal.instance.creation = t
+        goal.instance.update = t
+        # convert to a dict and insert
+        instance_id = self._woid.insert(extract_values(goal.instance))
+        # put the instance_id into the response
+        result = CreateWorldObjectInstanceResult(instance_id)
+        # send the response
+        self._cwoi.set_succeeded(result, 'Success')
     
-    @param request: the service request
-    @type  request: UpdateWorldObjectInstance
-    @return: the service response
-    @rtype:  UpdateWorldObjectInstanceResponse
-    '''
-    # update the update time
-    request.instance.update = rospy.get_rostime()
-    # make sure to set the instance_id so it cannot be changed
-    request.instance.instance_id = request.instance_id
-    # convert to JSON and update
-    success = woid.update_entity_by_instance_id(request.instance_id,
-                                                extract_values(request.instance))
-    if success is not True:
-        rospy.logwarn(request.instance_id + ' could not be updated.')
+    def update_world_object_instance(self, goal):
+        '''
+        The update_world_object_instance action server will update an instance in the world object 
+        instance database. The update time will be set to the current time. The instance_id cannot 
+        be updated with this request.
+        
+        @param goal: the goal containing the instance to update in the database
+        @type  goal: UpdateWorldObjectInstanceGoal
+        '''
+        # update the update time
+        goal.instance.update = rospy.get_rostime()
+        # make sure to set the instance_id so it cannot be changed
+        goal.instance.instance_id = goal.instance_id
+        # convert to a dict and update
+        success = self._woid.update_entity_by_instance_id(goal.instance_id,
+                                                          extract_values(goal.instance))
+        if success is not True:
+            rospy.logwarn(goal.instance_id + ' could not be updated.')
+            response = goal.instance_id + ' could not be updated. Is the instance_id valid?'
+        else:
+            response = 'Success'
+        # put the result into the response
+        result = UpdateWorldObjectInstanceResult(success)
+        # send the response
+        self._uwoi.set_succeeded(result, response)
+        
+    def world_object_instance_tag_search(self, goal):
+        '''
+        The world_object_instance_tag_search action server will search for all instances in the 
+        database that have the given list of tags.
+        
+        @param goal: the goal containing the instance to update in the database
+        @type  goal: WorldObjectInstanceTagSearchGoal
+        '''
+        # search for all of the tags
+        entities = self._woid.search_tags(goal.tags)
+        instances = []
+        # parse out the data
+        for e in entities:
+            del e['_id']
+            instances.append(populate_instance(e, WorldObjectInstance()))
+        # put the instances into the response
+        result = WorldObjectInstanceTagSearchResult(instances)
+        # send the response
+        self._woits.set_succeeded(result, 'Success')
 
-    return UpdateWorldObjectInstanceResponse(success)
-
-def search_world_object_instance_tags(request):
-    '''
-    Search for and return all instances in the database that have the given list of tags.
-    
-    @param request: the service request
-    @type  request: WorldObjectInstanceTagSearch
-    @return: the service response
-    @rtype:  WorldObjectInstanceTagSearchResponse
-    '''
-    # convert into ROS messages
-    entities = woid.search_tags(request.tags)
-    instances = []
-    for e in entities:
-        del e['_id']
-        instances.append(populate_instance(e, WorldObjectInstance()))
-    return WorldObjectInstanceTagSearchResponse(instances)
-
-def create_world_object_description(request):
-    '''
-    The create_world_object_description service call will create a new description in the world 
-    object description database. A unique description_id will be assigned.
-    
-    @param request: the service request
-    @type  request: CreateWorldObjectDescription
-    @return: the service response
-    @rtype:  CreateWorldObjectDescriptionResponse
-    '''
-    # convert to JSON and insert
-    description_id = wodd.insert(extract_values(request.description))
-    return CreateWorldObjectDescriptionResponse(description_id)
-
-def get_world_object_description(request):
-    '''
-    The get_world_object_description service call will search for and return a world object 
-    description with the given description_id.
-    
-    @param request: the service request
-    @type  request: GetWorldObjectDescription
-    @return: the service response
-    @rtype:  GetWorldObjectDescriptionResponse
-    '''
-    entity = wodd.search_description_id(request.description_id)
-    description = WorldObjectDescription()
-    if entity is not None:
-        populate_instance(entity, description)
-    return GetWorldObjectDescriptionResponse(description, entity is not None)
+    def create_world_object_description(self, goal):
+        '''
+        The create_world_object_description action server will create a new description in the world 
+        object description database. A unique description_id will be assigned.
+        
+        @param goal: the goal containing the description to insert into the database
+        @type  goal: CreateWorldObjectDescriptionGoal
+        '''
+        # convert to a dict and insert
+        description_id = self._wodd.insert(extract_values(goal.description))
+        # put the description_id into the response
+        result = CreateWorldObjectDescriptionResult(description_id)
+        # send the response
+        self._cwod.set_succeeded(result, 'Success')
+        
+    def get_world_object_description(self, goal):
+        '''
+        The get_world_object_description action server will search for and return a world object 
+        description with the given description_id.
+        
+        @param goal: the service request
+        @type  goal: GetWorldObjectDescriptionGoal
+        '''
+        # make a request through the API
+        entity = self._wodd.search_description_id(goal.description_id)
+        # if a result was found, parse out the data
+        exists = entity is not None
+        description = WorldObjectDescription()
+        if exists:
+            populate_instance(entity, description)
+            response = 'Success'
+        else:
+            response = goal.description_id + ' not found.'
+        # put the result into the response
+        result = GetWorldObjectDescriptionResult(description, exists)
+        # send the response
+        self._gwod.set_succeeded(result, response)
 
 def main():
     '''
     The main run function for the world_model node.
     '''
     rospy.init_node('world_model')
-    # advertise the services
-    rospy.Service('~create_world_object_instance', CreateWorldObjectInstance,
-                  create_world_object_instance)
-    rospy.Service('~search_world_object_instance_tags', WorldObjectInstanceTagSearch,
-                  search_world_object_instance_tags)
-    rospy.Service('~update_world_object_instance', UpdateWorldObjectInstance,
-                  update_world_object_instance)
-    rospy.Service('~create_world_object_description', CreateWorldObjectDescription,
-                  create_world_object_description)
-    rospy.Service('~get_world_object_description', GetWorldObjectDescription,
-                  get_world_object_description)
-    rospy.loginfo('World Model Node is Ready')
+    # create the object to handle everything
+    WorldModel()
     rospy.spin()
 
 if __name__ == '__main__':

@@ -37,96 +37,103 @@ The map_listener node listens to a specified OccupancyGrid message and updates t
 accordingly.
 
 @author:  Russell Toris
-@version: January 25, 2013
+@version: January 31, 2013
 '''
 
 import rospy
+import actionlib
 from nav_msgs.msg import OccupancyGrid
-from world_msgs.srv import *
+from worldlib.msg import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription, Description
 from rosbridge_library.internal.message_conversion import extract_values
 import socket
 
-def map_cb(message, args):
+class MapListener(object):
     '''
-    Main callback for a map topic. This will insert a new entity in the world object instance 
-    database or update an existing entity if one exists with the same tags. 
+    The main MapListener object adds/updates the map in the world model.
+    '''
     
-    @param message: the ROS message for the map
-    @type  message: OccupancyGrid
-    @param args: the topic and namespace for this node
-    @type  topic: dict
-    '''
-    # break up the message and store it
-    instance = WorldObjectInstance()
+    def __init__(self):
+        '''
+        Create the MapListener to listen to a map topic and update the world model accordingly.
+        '''
+        # create a connection to the action servers we need
+        rospy.loginfo('Waiting for world_model action servers to become available...')
+        self._cwoi = actionlib.SimpleActionClient('/world_model/create_world_object_instance',
+                                                  CreateWorldObjectInstanceAction)
+        self._uwoi = actionlib.SimpleActionClient('/world_model/update_world_object_instance',
+                                                  UpdateWorldObjectInstanceAction)
+        self._woits = actionlib.SimpleActionClient('/world_model/world_object_instance_tag_search',
+                                                   WorldObjectInstanceTagSearchAction)
+        self._cwod = actionlib.SimpleActionClient('/world_model/create_world_object_description',
+                                                  CreateWorldObjectDescriptionAction)
+        # wait for the action servers
+        self._cwoi.wait_for_server()
+        self._uwoi.wait_for_server()
+        self._woits.wait_for_server()
+        self._cwod.wait_for_server()
+        # check for a topic to listen on
+        t = rospy.get_param('~topic', '/map')
+        ns = rospy.get_param('~ns', 'my_robot')
+        # subscribe to the topic with a queue size of 1
+        rospy.Subscriber(t, OccupancyGrid, self.map_cb, {'topic' : t, 'ns' : ns}, 1)
+        rospy.loginfo('Map Listener is Ready!')
 
-    # source information for this node
-    instance.source.origin = socket.gethostname()
-    instance.source.creator = 'map_listener'
-    
-    # position information
-    instance.pose.pose.pose = message.info.origin
-    
-    instance.tags = ['map', args['ns']]
-    
-    # check if we already have a map
-    search = rospy.ServiceProxy('/world_model/search_world_object_instance_tags',
-                                WorldObjectInstanceTagSearch)
-    resp = search(instance.tags)
-    if len(resp.instances) > 0:
-        # check if we only found one (which should be the case)
-        if len(resp.instances) > 1:
-            rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns'] + 
-                          '". Defaulting to first result.')
-        # create a handle and do the update
-        update = rospy.ServiceProxy('/world_model/update_world_object_instance',
-                                    UpdateWorldObjectInstance)
-        update(resp.instances[0].instance_id, instance)
-    else:
-        # new instance
-        instance.name = args['ns'] + ' Map'
-        # maps usually last a long time (on year)
-        instance.expected_ttl = rospy.Duration(60 * 60 * 24 * 356)
+    def map_cb(self, message, args):
+        '''
+        Main callback for a map topic. This will insert a new entity in the world object instance 
+        database or update an existing entity if one exists with the same tags. Furthermore,
+        if this is creating a new map, the occupancy grid will be stored in its description.
         
-        # create a description of the map using the occupancy grid
-        object_description = WorldObjectDescription()
-        description = Description()
-        description.type = 'nav_msgs/OccupancyGrid'
-        description.data = str(extract_values(message))
-        description.ref = args['topic']
-        description.tag = 'OccupancyGrid'
-        object_description.descriptions.append(description)
-        # create a handle and do the creation
-        create_description = rospy.ServiceProxy('/world_model/create_world_object_description',
-                                                CreateWorldObjectDescription)
-        response = create_description(object_description)
-        instance.description_id = response.description_id
-        
-        # create a handle and do the creation
-        create_instance = rospy.ServiceProxy('/world_model/create_world_object_instance',
-                                             CreateWorldObjectInstance)
-        create_instance(instance)
+        @param message: the ROS message for the map
+        @type  message: OccupancyGrid
+        @param args: the topic and namespace for this node
+        @type  topic: dict
+        '''
+        # break up the message and store it
+        instance = WorldObjectInstance()
+        # source information for this node
+        instance.source.origin = socket.gethostname()
+        instance.source.creator = 'map_listener'
+        # position information
+        instance.pose.pose.pose = message.info.origin
+        instance.tags = ['map', args['ns']]
+        # check if we already have a map
+        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(instance.tags))
+        resp = self._woits.get_result()
+        if len(resp.instances) > 0:
+            # check if we only found one (which should be the case)
+            if len(resp.instances) > 1:
+                rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns']
+                              + '". Defaulting to first result.')
+            # create a goal and do the update
+            self._uwoi.send_goal(UpdateWorldObjectInstanceGoal(resp.instances[0].instance_id,
+                                                               instance))
+        else:
+            # new instance
+            instance.name = args['ns'] + ' Map'
+            # maps usually last a long time (on year)
+            instance.expected_ttl = rospy.Duration(60 * 60 * 24 * 356)
+            # create a description of the map using the occupancy grid
+            object_description = WorldObjectDescription()
+            description = Description()
+            description.type = 'nav_msgs/OccupancyGrid'
+            description.data = str(extract_values(message))
+            description.ref = args['topic']
+            description.tag = 'OccupancyGrid'
+            object_description.descriptions.append(description)
+            # create a goal and do the description creation
+            self._cwod.send_goal_and_wait(CreateWorldObjectDescriptionGoal(object_description))
+            instance.description_id = self._cwod.get_result().description_id
+            # create a goal and do the instance creation
+            self._cwoi.send_goal(CreateWorldObjectInstanceGoal(instance))
 
 def main():
     '''
     The main run function for the map_listener node.
     '''
     rospy.init_node('map_listener')
-    # wait for the world model node
-    rospy.loginfo('Waiting for world_model services to become available...')
-    rospy.wait_for_service('/world_model/create_world_object_instance')
-    rospy.wait_for_service('/world_model/update_world_object_instance')
-    rospy.wait_for_service('/world_model/search_world_object_instance_tags')
-    rospy.wait_for_service('/world_model/create_world_object_description')
-    
-    # check for a topic to listen on
-    t = rospy.get_param('~topic', '/map')
-    ns = rospy.get_param('~ns', 'my_robot')
-    
-    # subscribe to the topic with a queue size of 1
-    rospy.Subscriber(t, OccupancyGrid, map_cb, {'topic' : t, 'ns' : ns}, 1)
-
-    rospy.loginfo('Map Listener is Ready!')
+    MapListener()
     rospy.spin()
 
 
