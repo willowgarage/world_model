@@ -36,7 +36,7 @@
 The world_model node exposes the worldlib API over ROS topics and services.
 
 @author:  Russell Toris
-@version: January 30, 2013
+@version: February 4, 2013
 '''
 
 import rospy
@@ -59,22 +59,26 @@ class WorldModel(object):
         self._woid = world_object_instance_database.WorldObjectInstanceDatabase()
         self._wodd = world_object_description_database.WorldObjectDescriptionDatabase()
         # advertise the action servers
-        self._cwoi = actionlib.SimpleActionServer('/world_model/create_world_object_instance',
-                                                  CreateWorldObjectInstanceAction,
-                                                  self.create_world_object_instance, False)
-        self._uwoi = actionlib.SimpleActionServer('/world_model/update_world_object_instance',
-                                                  UpdateWorldObjectInstanceAction,
-                                                  self.update_world_object_instance, False)
+        self._cwoi = actionlib.ActionServer('/world_model/create_world_object_instance',
+                                            CreateWorldObjectInstanceAction,
+                                            self.create_world_object_instance,
+                                            auto_start=False)
+        self._uwoi = actionlib.ActionServer('/world_model/update_world_object_instance',
+                                            UpdateWorldObjectInstanceAction,
+                                            self.update_world_object_instance,
+                                            auto_start=False)
         self._woits = actionlib.ActionServer('/world_model/world_object_instance_tag_search',
-                                                   WorldObjectInstanceTagSearchAction,
-                                                   self.world_object_instance_tag_search,
-                                                   auto_start=False)
-        self._cwod = actionlib.SimpleActionServer('/world_model/create_world_object_description',
-                                                  CreateWorldObjectDescriptionAction,
-                                                  self.create_world_object_description, False)
-        self._gwod = actionlib.SimpleActionServer('/world_model/get_world_object_description',
-                                                  GetWorldObjectDescriptionAction,
-                                                  self.get_world_object_description, False)
+                                             WorldObjectInstanceTagSearchAction,
+                                             self.world_object_instance_tag_search,
+                                             auto_start=False)
+        self._cwod = actionlib.ActionServer('/world_model/create_world_object_description',
+                                            CreateWorldObjectDescriptionAction,
+                                            self.create_world_object_description,
+                                            auto_start=False)
+        self._gwod = actionlib.ActionServer('/world_model/get_world_object_description',
+                                            GetWorldObjectDescriptionAction,
+                                            self.get_world_object_description,
+                                            auto_start=False)
         # start the action servers
         self._cwoi.start()
         self._uwoi.start()
@@ -83,15 +87,17 @@ class WorldModel(object):
         self._gwod.start()
         rospy.loginfo('World Model Node is Ready')
 
-    def create_world_object_instance(self, goal):
+    def create_world_object_instance(self, gh):
         '''
         The create_world_object_instance action server will create a new instance in the world 
         object instance database. A unique instance_id will be assigned and the creation time will 
         be set.
         
-        @param goal: the goal containing the instance to insert into the database
-        @type  goal: CreateWorldObjectInstanceGoal
+        @param gh: the goal handle containing the instance to insert into the database
+        @type  gh: ServerGoalHandle
         '''
+        gh.set_accepted()
+        goal = gh.get_goal()
         # update the times
         t = rospy.get_rostime()
         goal.instance.creation = t
@@ -101,17 +107,19 @@ class WorldModel(object):
         # put the instance_id into the response
         result = CreateWorldObjectInstanceResult(instance_id)
         # send the response
-        self._cwoi.set_succeeded(result, 'Success')
+        gh.set_succeeded(result, 'Success')
     
-    def update_world_object_instance(self, goal):
+    def update_world_object_instance(self, gh):
         '''
         The update_world_object_instance action server will update an instance in the world object 
         instance database. The update time will be set to the current time. The instance_id cannot 
         be updated with this request.
         
-        @param goal: the goal containing the instance to update in the database
-        @type  goal: UpdateWorldObjectInstanceGoal
+        @param gh: the goal handle containing the instance to update in the database
+        @type  gh: ServerGoalHandle
         '''
+        gh.set_accepted()
+        goal = gh.get_goal()
         # update the update time
         goal.instance.update = rospy.get_rostime()
         # make sure to set the instance_id so it cannot be changed
@@ -127,7 +135,7 @@ class WorldModel(object):
         # put the result into the response
         result = UpdateWorldObjectInstanceResult(success)
         # send the response
-        self._uwoi.set_succeeded(result, response)
+        gh.set_succeeded(result, response)
         
     def world_object_instance_tag_search(self, gh):
         '''
@@ -151,29 +159,33 @@ class WorldModel(object):
         # send the response
         gh.set_succeeded(result, 'Success')
 
-    def create_world_object_description(self, goal):
+    def create_world_object_description(self, gh):
         '''
         The create_world_object_description action server will create a new description in the world 
         object description database. A unique description_id will be assigned.
         
-        @param goal: the goal containing the description to insert into the database
-        @type  goal: CreateWorldObjectDescriptionGoal
+        @param gh: the goal handle containing the description to insert into the database
+        @type  gh: ServerGoalHandle
         '''
+        gh.set_accepted()
+        goal = gh.get_goal()
         # convert to a dict and insert
         description_id = self._wodd.insert(extract_values(goal.description))
         # put the description_id into the response
         result = CreateWorldObjectDescriptionResult(description_id)
         # send the response
-        self._cwod.set_succeeded(result, 'Success')
+        gh.set_succeeded(result, 'Success')
         
-    def get_world_object_description(self, goal):
+    def get_world_object_description(self, gh):
         '''
         The get_world_object_description action server will search for and return a world object 
         description with the given description_id.
         
-        @param goal: the service request
-        @type  goal: GetWorldObjectDescriptionGoal
+        @param gh: the goal handle containing the description_id to get
+        @type  gh: ServerGoalHandle
         '''
+        gh.set_accepted()
+        goal = gh.get_goal()
         # make a request through the API
         entity = self._wodd.search_description_id(goal.description_id)
         # if a result was found, parse out the data
@@ -187,7 +199,7 @@ class WorldModel(object):
         # put the result into the response
         result = GetWorldObjectDescriptionResult(description, exists)
         # send the response
-        self._gwod.set_succeeded(result, response)
+        gh.set_succeeded(result, response)
 
 def main():
     '''
