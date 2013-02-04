@@ -44,7 +44,7 @@ import actionlib
 from worldlib import world_object_instance_database, world_object_description_database
 from worldlib.msg import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription
-from rosbridge_library.internal.message_conversion import extract_values, populate_instance
+from rospy_message_converter import message_converter
 
 class WorldModel(object):
     '''
@@ -103,7 +103,7 @@ class WorldModel(object):
         goal.instance.creation = t
         goal.instance.update = t
         # convert to a dict and insert
-        instance_id = self._woid.insert(extract_values(goal.instance))
+        instance_id = self._woid.insert(message_converter.convert_ros_message_to_dictionary(goal.instance))
         # put the instance_id into the response
         result = CreateWorldObjectInstanceResult(instance_id)
         # send the response
@@ -126,7 +126,7 @@ class WorldModel(object):
         goal.instance.instance_id = goal.instance_id
         # convert to a dict and update
         success = self._woid.update_entity_by_instance_id(goal.instance_id,
-                                                          extract_values(goal.instance))
+                                                          message_converter.convert_ros_message_to_dictionary(goal.instance))
         if success is not True:
             rospy.logwarn(goal.instance_id + ' could not be updated.')
             response = goal.instance_id + ' could not be updated. Is the instance_id valid?'
@@ -153,7 +153,7 @@ class WorldModel(object):
         # parse out the data
         for e in entities:
             del e['_id']
-            instances.append(populate_instance(e, WorldObjectInstance()))
+            instances.append(message_converter.convert_dictionary_to_ros_message('world_msgs/WorldObjectInstance', e))
         # put the instances into the response
         result = WorldObjectInstanceTagSearchResult(instances)
         # send the response
@@ -170,7 +170,7 @@ class WorldModel(object):
         gh.set_accepted()
         goal = gh.get_goal()
         # convert to a dict and insert
-        description_id = self._wodd.insert(extract_values(goal.description))
+        description_id = self._wodd.insert(message_converter.convert_ros_message_to_dictionary(goal.description))
         # put the description_id into the response
         result = CreateWorldObjectDescriptionResult(description_id)
         # send the response
@@ -192,7 +192,7 @@ class WorldModel(object):
         exists = entity is not None
         description = WorldObjectDescription()
         if exists:
-            populate_instance(entity, description)
+            description = message_converter.convert_dictionary_to_ros_message('world_msgs/WorldObjectDescription', entity)
             response = 'Success'
         else:
             response = goal.description_id + ' not found.'
