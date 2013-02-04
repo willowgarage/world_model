@@ -106,9 +106,9 @@ class MapListener(object):
             if len(resp.instances) > 1:
                 rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns']
                               + '". Defaulting to first result.')
-            # create a goal and do the update
+            # create a goal and do the update (updates the timestamp only)
             self._uwoi.send_goal(UpdateWorldObjectInstanceGoal(resp.instances[0].instance_id,
-                                                               instance))
+                                                               resp.instances[0]))
         else:
             # new instance
             instance.name = args['ns'] + ' Map'

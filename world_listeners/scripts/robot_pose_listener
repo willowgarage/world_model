@@ -38,7 +38,7 @@ and updates the world model accordingly. This node will also wait for the robot 
 published and try to re-localize the robot upon startup.
 
 @author:  Russell Toris
-@version: January 31, 2013
+@version: February 4, 2013
 '''
 
 import rospy
@@ -142,9 +142,11 @@ class RobotPoseListener(object):
             if len(robot_resp.instances) > 1:
                 rospy.logwarn('Multiple world object instances tagged with "robot" and "' + 
                               args['ns'] + '". Defaulting to first result.')
+            # update with new information
+            robot_resp.instances[0].pose = instance.pose
             # create a goal and do the update
             self._uwoi.send_goal(UpdateWorldObjectInstanceGoal(robot_resp.instances[0].instance_id,
-                                                               instance))
+                                                               robot_resp.instances[0]))
         else:
             # new instance
             instance.name = args['ns'] + ' Robot'
