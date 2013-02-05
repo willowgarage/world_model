@@ -4,7 +4,7 @@ project(worldlib)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS rospy world_msgs rosbridge_library actionlib geometry_msgs)
+find_package(catkin REQUIRED COMPONENTS rospy world_msgs rospy_message_converter actionlib geometry_msgs)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and scripts declared therein get installed

@@ -37,7 +37,7 @@ The map_listener node listens to a specified OccupancyGrid message and updates t
 accordingly.
 
 @author:  Russell Toris
-@version: January 31, 2013
+@version: February 4, 2013
 '''
 
 import rospy
@@ -45,7 +45,7 @@ import actionlib
 from nav_msgs.msg import OccupancyGrid
 from worldlib.msg import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription, Description
-from rosbridge_library.internal.message_conversion import extract_values
+from rospy_message_converter import json_message_converter
 import socket
 
 class MapListener(object):
@@ -106,9 +106,9 @@ class MapListener(object):
             if len(resp.instances) > 1:
                 rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns']
                               + '". Defaulting to first result.')
-            # create a goal and do the update
+            # create a goal and do the update (updates the timestamp only)
             self._uwoi.send_goal(UpdateWorldObjectInstanceGoal(resp.instances[0].instance_id,
-                                                               instance))
+                                                               resp.instances[0]))
         else:
             # new instance
             instance.name = args['ns'] + ' Map'
@@ -118,7 +118,7 @@ class MapListener(object):
             object_description = WorldObjectDescription()
             description = Description()
             description.type = 'nav_msgs/OccupancyGrid'
-            description.data = str(extract_values(message))
+            description.data = json_message_converter.convert_ros_message_to_json(message)
             description.ref = args['topic']
             description.tag = 'OccupancyGrid'
             object_description.descriptions.append(description)

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<script type="text/javascript"
+	src="https://raw.github.com/RobotWebTools/rosjs/groovy-devel/dist/ros_bundle.min.js"></script>
+<script type="text/javascript"
+	src="https://raw.github.com/RobotWebTools/actionlibjs/groovy-devel/actionclient.js"></script>
+
+<script type="text/javascript" src="../worldmodelview2d.js"></script>
+<script type="text/javascript" src="../../worldmodeljs/worldmodel.js"></script>
+
+<script type="text/javascript">
+  function start() {
+    var host = 'localhost';
+
+    // initialize the world model object 
+    var world = new WorldModel({
+      ros : new ROS('ws://' + host + ':9090')
+    });
+
+    // create the viwer
+    var view = new WorldModelView2D({
+      worldModel : world,
+      div : 'view'
+    });
+  }
+</script>
+</head>
+
+<body onload="start()">
+	<div id="view"></div>
+</body>
+</html>

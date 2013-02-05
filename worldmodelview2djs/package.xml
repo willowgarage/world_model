@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package>
+  <name>worldmodelview2djs</name>
+  <version>0.0.1</version>
+  <description>World model 2D visualizer.</description>
+
+  <maintainer email="rctoris@wpi.edu">Russell Toris</maintainer>
+  <author email="rctoris@wpi.edu">Russell Toris</author>
+
+  <license>BSD</license>
+
+  <url type="website">http://ros.org/wiki/worldmodelview2djs</url>
+  <url type="bugtracker">https://github.com/willowgarage/world_model/issues</url>
+  <url type="repository">https://github.com/willowgarage/world_model</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>
