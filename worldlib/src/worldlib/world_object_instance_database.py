@@ -94,14 +94,33 @@ class WorldObjectInstanceDatabase(object):
         exists.
         
         @param instance_id: the instance_id of the entity to update
-        @type  instance_id: string
+        @type  instance_id: int
         @param entity: the entity to update with
         @type  entity: dict
         @return: if an entity was found and updated with the given instance_id
         @rtype:  bool
         '''
-        # check if that id exists and update it
-        # return self.db.find_and_modify({'instance_id' : instance_id}, {'$set' : entity}) is not None
+        # create a cursor
+        cur = self.conn.cursor()
+        # check if the instance actually exists
+        cur.execute("""SELECT instance_id FROM """ + self._woi + 
+                    """ WHERE instance_id = %s""", (instance_id,))
+        if len(cur.fetchall()) is 0:
+            return False
+        else:
+            # ensure the instance ID does not get set by the user
+            if 'instance_id' in entity.keys():
+                del entity['instance_id']
+            # build the SQL
+            helper = self._build_sql_helper(entity)
+            # build the SQL
+            helper['values'] += (instance_id,)
+            cur.execute("""UPDATE """ + self._woi + 
+                        """ SET (""" + helper['cols'] + """) = (""" + helper['holders'] + 
+                        """) WHERE instance_id = %s""", helper['values'])
+            self.conn.commit()
+            cur.close()
+            return True
     
     def search_tags(self, tags):
         '''

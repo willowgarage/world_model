@@ -127,8 +127,8 @@ class WorldModel(object):
         # make sure to set the instance_id so it cannot be changed
         goal.instance.instance_id = goal.instance_id
         # convert to a dict and update
-        success = self._woid.update_entity_by_instance_id(goal.instance_id,
-                                                          convert_ros_message_to_dictionary(goal.instance))
+        dict = self._world_object_instance_msg_to_db_dict(goal.instance)
+        success = self._woid.update_entity_by_instance_id(goal.instance_id, dict)
         if success is not True:
             rospy.logwarn(goal.instance_id + ' could not be updated.')
             response = goal.instance_id + ' could not be updated. Is the instance_id valid?'
