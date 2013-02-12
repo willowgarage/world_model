@@ -31,11 +31,11 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 '''
-The WorldObjectDescriptionDatabase class provides functions to natively communicate with a local 
-Mongo world object description database.
+The WorldObjectDescriptionDatabase class provides functions to natively communicate with a 
+PostgreSQL world model database for the world_object_descriptions table.
 
 @author:  Russell Toris
-@version: January 25, 2013
+@version: February 10, 2013
 '''
 
 from pymongo import Connection

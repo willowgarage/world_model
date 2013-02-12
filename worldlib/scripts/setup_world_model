@@ -38,7 +38,7 @@ are setting up a **local** PostgreSQL database for use with the world model. It 
 to upgrade an exiting world model.
 
 @author:  Russell Toris
-@version: February 8, 2013
+@version: February 11, 2013
 '''
 
 import psycopg2
@@ -56,7 +56,7 @@ _wod = 'world_object_descriptions'
 # name of the world object instance table
 _woi = 'world_object_instances'
 
-def update_database():
+def update_database(conn):
     '''
     The main update function for the World Model database.
     
@@ -64,6 +64,7 @@ def update_database():
     @type conn: Connection
     '''
     print 'Begining World Model update...'
+    conn.close()
     print 'World Model update completed successfully!'
 
 def init_database(conn):
@@ -180,7 +181,6 @@ def init_database(conn):
     conn.commit()
     conn.close()
     print 'World Model setup completed successfully!'
-    
 
 if __name__ == '__main__':
     # get the username and password
@@ -193,11 +193,10 @@ if __name__ == '__main__':
         conn = psycopg2.connect(database=_db, user=args['username'], password=args['password'],
                                 host='localhost')
         cur = conn.cursor()
-        cur.execute("select * from information_schema.tables where table_name=%s", (_version,))
+        cur.execute("""SELECT * FROM information_schema.tables WHERE table_name=%s""", (_version,))
         if len(cur.fetchall()) is 0:
             init_database(conn)
         else:
-            update_database()
+            update_database(conn)
     except Exception as e:
         print e
-

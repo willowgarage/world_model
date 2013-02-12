@@ -1,6 +1,5 @@
 /**
- * Author: Russell Toris
- * Version: February 1, 2013
+ * Author: Russell Toris Version: February 1, 2013
  */
 
 var WorldModelView2D = function(options) {
@@ -27,9 +26,12 @@ var WorldModelView2D = function(options) {
   // an array to hold all robot object instances
   var robots = [];
   // icon information
-  var robotRadius = 1;
-  var robotRadiusGrow = true;
   var maxRobotRadius = 6;
+  var minRobotRadius = 3;
+  var robotRadius = minRobotRadius;
+  var robotRadiusGrow = true;
+  var growThrottle = 2;
+  var growCounter = 0;
 
   // an array to hold all poi object instances
   var poi = [];
@@ -137,7 +139,7 @@ var WorldModelView2D = function(options) {
   };
 
   // draw a point on the canvas in world coordinates
-  view2D.drawWorldPoint = function(x, y, radius, color) {
+  view2D.drawWorldPoint = function(x, y, theta, radius, color) {
     // get the size of the map and the offset
     var dim = view2D.getScaledMapDimensions();
     var resolution = view2D.getScaledResolution();
@@ -149,12 +151,19 @@ var WorldModelView2D = function(options) {
     // note that 0, 0 in our coordinate frame is at the bottom left
     var addOffsetY = canvas.height - offsetY - ((y / resolution));
 
-    // add the point of interest marker
+    // add the marker
+    context.save();
     context.fillStyle = color;
+    context.translate(addOffsetX, addOffsetY);
+    context.rotate(-(theta + Math.PI / 2.0));
+    context.moveTo(-radius, -radius);
     context.beginPath();
-    context.arc(addOffsetX, addOffsetY, radius, 0, Math.PI * 2, true);
+    context.lineTo(0, radius * 2);
+    context.lineTo(radius, -radius);
+    context.lineTo(-radius, -radius);
     context.closePath();
     context.fill();
+    context.restore();
   };
 
   // draw the world model onto the canvas
@@ -179,23 +188,42 @@ var WorldModelView2D = function(options) {
       for ( var i = 0; i < poi.length; i++) {
         var poiX = poi[i].pose.pose.pose.position.x;
         var poiY = poi[i].pose.pose.pose.position.y;
-        view2D.drawWorldPoint(poiX, poiY, 8, '#24E576');
+        var q0 = poi[i].pose.pose.pose.orientation.w;
+        var q1 = poi[i].pose.pose.pose.orientation.x;
+        var q2 = poi[i].pose.pose.pose.orientation.y;
+        var q3 = poi[i].pose.pose.pose.orientation.z;
+        var theta = Math.atan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (Math
+            .pow(q2, 2) + Math.pow(q3, 2)));
+        view2D.drawWorldPoint(poiX, poiY, theta, 6, '#24E576');
       }
 
       // draw the robots
       for ( var i = 0; i < robots.length; i++) {
         var robotX = robots[i].pose.pose.pose.position.x;
         var robotY = robots[i].pose.pose.pose.position.y;
-        view2D.drawWorldPoint(robotX, robotY, robotRadius, '#543210');
+        // angle
+        var q0 = robots[i].pose.pose.pose.orientation.w;
+        var q1 = robots[i].pose.pose.pose.orientation.x;
+        var q2 = robots[i].pose.pose.pose.orientation.y;
+        var q3 = robots[i].pose.pose.pose.orientation.z;
+        var theta = Math.atan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (Math
+            .pow(q2, 2) + Math.pow(q3, 2)));
+
+        view2D.drawWorldPoint(robotX, robotY, theta, robotRadius, '#543210');
       }
       // update the robot marker radius
-      if (robotRadiusGrow) {
-        robotRadius++;
+      if (growCounter >= growThrottle) {
+        if (robotRadiusGrow) {
+          robotRadius++;
+        } else {
+          robotRadius--;
+        }
+        if (robotRadius === maxRobotRadius || robotRadius <= minRobotRadius) {
+          robotRadiusGrow = !robotRadiusGrow;
+        }
+        growCounter = 0;
       } else {
-        robotRadius--;
-      }
-      if (robotRadius == maxRobotRadius || robotRadius == 1) {
-        robotRadiusGrow = !robotRadiusGrow;
+        growCounter++;
       }
 
       // call the callbacks

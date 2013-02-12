@@ -1,5 +1,5 @@
 # unique identifier for this description
-string description_id
+int32 description_id
 # list of all descriptions of this object
 world_msgs/Description[] descriptions
 # high level tags

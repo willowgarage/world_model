@@ -31,31 +31,35 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 '''
-The WorldObjectInstanceDatabase class provides functions to natively communicate with a local Mongo 
-world object instance database.
+The WorldObjectInstanceDatabase class provides functions to natively communicate with a PostgreSQL 
+world model database for the world_object_descriptions table.
 
 @author:  Russell Toris
-@version: January 25, 2013
+@version: February 12, 2013
 '''
 
-from pymongo import Connection
-from pymongo.objectid import ObjectId
+import psycopg2
 
 class WorldObjectInstanceDatabase(object):
     '''
-    The main WorldObjectInstanceDatabase object which communicates with the local Mongo world object
-    instance database.
+    The main WorldObjectInstanceDatabase object which communicates with the PostgreSQL world model 
+    database.
     '''
 
-    def __init__(self):
+    # fields in the database that are timestamps
+    timestamps = ['creation', 'update', 'perceived_end', 'pose_stamp']
+    
+    # name of the world object instance table
+    _woi = 'world_object_instances'
+
+    def __init__(self, user, pwd, host='localhost'):
         '''
         Creates the WorldObjectInstanceDatabase object and connects to the world object instance
         database.
         '''
         # connect to the world model database
-        self.mongo = Connection()
-        self.db = self.mongo.wm.world_object_instance
-        
+        self.conn = psycopg2.connect(database='world_model', user=user, password=pwd, host=host)
+
     def insert(self, entity):
         '''
         Insert the given entity into the world object instance database. This will create a new 
@@ -64,14 +68,23 @@ class WorldObjectInstanceDatabase(object):
         @param entity: the entity to insert
         @type  entity: dict
         @return: the instance_id
-        @rtype: string
+        @rtype: integer
         '''
-        # generate the ID
-        _id = ObjectId()
-        instance_id = 'world_object_instance_' + str(_id)
-        entity['_id'] = _id
-        entity['instance_id'] = instance_id
-        self.db.insert(entity)
+        # create a cursor
+        cur = self.conn.cursor()
+        # ensure the instance ID does not get set by the user
+        if 'instance_id' in entity.keys():
+            del entity['instance_id']
+        # build the SQL
+        helper = self._build_sql_helper(entity)
+        # build the SQL
+        cur.execute("""INSERT INTO """ + self._woi + 
+                    """ (instance_id, """ + helper['cols'] + """) 
+                    VALUES (nextval('world_object_instances_instance_id_seq'), 
+                    """ + helper['holders'] + """) RETURNING instance_id""", helper['values'])
+        instance_id = cur.fetchone()[0]
+        self.conn.commit()
+        cur.close()
         # return the instance ID
         return instance_id
             
@@ -88,32 +101,7 @@ class WorldObjectInstanceDatabase(object):
         @rtype:  bool
         '''
         # check if that id exists and update it
-        return self.db.find_and_modify({'instance_id' : instance_id}, {'$set' : entity}) is not None
-
-    def search__id(self, _id):
-        '''
-        Search for and return the entity in the world object instance database with the given ID, 
-        if one exists. Note that this ID is associated with the internal, database ID, not the 
-        instance_id. See search_instance_id instead for this search.
-        
-        @param _id: the ID of the entity to search for
-        @type  _id: string
-        @return: the entity found, or None if an invalid ID was given
-        @rtype:  dict
-        '''
-        return self.db.find_one({'_id' : _id})
-    
-    def search_instance_id(self, instance_id):
-        '''
-        Search for and return the entity in the world object instance database with the given 
-        instance_id, if one exists.
-        
-        @param instance_id: the instance_id field of the entity to search for
-        @type  instance_id: string
-        @return: the entity found, or None if an invalid instance_id was given
-        @rtype:  dict
-        '''
-        return self.db.find_one({'instance_id' : instance_id})
+        # return self.db.find_and_modify({'instance_id' : instance_id}, {'$set' : entity}) is not None
     
     def search_tags(self, tags):
         '''
@@ -125,30 +113,31 @@ class WorldObjectInstanceDatabase(object):
         @return: the entities found, or None
         @rtype:  pymongo.cursor.Cursor
         '''
-        return self.db.find({'tags' : {'$all' : tags}})
-    
-    def get_world_object_instances(self):
+        # return self.db.find({'tags' : {'$all' : tags}})
+        return []
+   
+    def _build_sql_helper(self, entity):
         '''
-        Return an array of all the world object instances in the database.
-
-        @return: the list of entities
-        @rtype:  pymongo.cursor.Cursor
+        A helper function to build the SQL for an insertion/update. This will take the entity dict
+        and create a new dict containing a string of comma separated column names, a string of
+        comma separated place holders (either '%s' or 'to_timestamp(...)'), and a tuple of the
+        values.
+        
+        @param entity: the entity to build the SQL helper for
+        @type  entity: dict
+        @return: the dictionary containing the three helper variables
+        @rtype: dict
         '''
-        return self.db.find()
-    
-    def get_tags(self):
-        '''
-        Return a list of all world object instances model tags.
-
-        @return: the array of tags
-        @rtype:  list
-        '''
-        tags = self.db.find({}, {'tags' : 1})
-        # extract the tags
-        tag_list = []
-        for entity in tags:
-            for t in entity['tags']:
-                tag_list.append(t)
-        # convert to a set to get a unique list
-        return list(set(tag_list))
-            
+        final = {'cols' : '', 'holders' : '', 'values' : ()}
+        for k in entity.keys():
+            final['cols'] += k + ', '
+            # check if this is a timestamp
+            if k in self.timestamps:
+                final['holders'] += 'to_timestamp(' + str(entity[k]) + '), '
+            else :
+                final['holders'] += '%s, '
+                final['values'] += (entity[k],)
+        # remove trailing ', '
+        final['cols'] = final['cols'][:-2]
+        final['holders'] = final['holders'][:-2]
+        return final
