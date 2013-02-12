@@ -110,12 +110,63 @@ class WorldObjectInstanceDatabase(object):
         
         @param tags: the list of tags to search for
         @type  tags: list
-        @return: the entities found, or None
-        @rtype:  pymongo.cursor.Cursor
+        @return: the entities found
+        @rtype: list
         '''
-        # return self.db.find({'tags' : {'$all' : tags}})
-        return []
-   
+        final = []
+        # do not search empty arrays
+        if len(tags) > 0:   
+            # create a cursor
+            cur = self.conn.cursor()
+            # build the SQL
+            sql = """SELECT * FROM """ + self._woi + """ WHERE ("""
+            values = ()
+            for t in tags:
+                sql += "%s = ANY (tags) AND "
+                values += (t,)
+            # remove the trailing ' AND '
+            sql = sql[:-5] + """);"""
+            cur.execute(sql, values)
+            # extract the values
+            results = cur.fetchall()
+            for r in results:
+                # convert to a dictionary and convert the timestamps
+                final.append(self._db_to_dict(r))
+            cur.close()
+        return final
+    
+    def _db_to_dict(self, entity):
+        '''
+        Convert a database tuple to a dict. This will also convert timestamps back into unix time.
+        This function assumes the tuple is in the correct order.
+        
+        @param entity: the entity to build the dictionary for
+        @type  entity: tuple
+        @return: the dictionary containing the information from the database
+        @rtype: dict
+        '''
+        # convert each one assuming the ordering is correct
+        final = {
+                'instance_id' : entity[0],
+                'name' : entity[1],
+                'creation' : None if entity[2] is None else float(entity[2].strftime('%s.%f')),
+                'update' : None if entity[3] is None else float(entity[3].strftime('%s.%f')),
+                'expected_ttl' : entity[4],
+                'perceived_end' : None if entity[5] is None else float(entity[5].strftime('%s.%f')),
+                'source_origin' : entity[6],
+                'source_creator' : entity[7],
+                'pose_seq' : entity[8],
+                'pose_stamp' : None if entity[9] is None else float(entity[9].strftime('%s.%f')),
+                'pose_frame_id' : entity[10],
+                'pose_position' : entity[11],
+                'pose_orientation' : entity[12],
+                'pose_covariance' : entity[13],
+                'description_id' : entity[14],
+                'properties' : entity[15],
+                'tags' : entity[16],
+                }
+        return final
+
     def _build_sql_helper(self, entity):
         '''
         A helper function to build the SQL for an insertion/update. This will take the entity dict

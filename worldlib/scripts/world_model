@@ -36,7 +36,7 @@
 The world_model node exposes the worldlib API over ROS topics and services.
 
 @author:  Russell Toris
-@version: February 10, 2013
+@version: February 12, 2013
 '''
 
 import rospy
@@ -44,7 +44,8 @@ import actionlib
 from worldlib import world_object_instance_database, world_object_description_database
 from worldlib.msg import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription
-from rospy_message_converter import message_converter
+from rospy_message_converter.message_converter import convert_dictionary_to_ros_message
+from rospy_message_converter.message_converter import convert_ros_message_to_dictionary
 
 class WorldModel(object):
     '''
@@ -86,47 +87,6 @@ class WorldModel(object):
         self._cwod.start()
         self._gwod.start()
         rospy.loginfo('World Model Node is Ready')
-        
-    def _world_object_instance_msg_to_db_dict(self, msg):
-        # first create a dictionary from the message itself
-        ros_dict = message_converter.convert_ros_message_to_dictionary(msg)
-        # now filter through to create a valid database dict
-        final = {}
-        for k in ros_dict.keys():
-            val = ros_dict[k]
-            if k is 'instance_id' and val > 0:
-                final[k] = val
-            elif k is 'name' and len(val) > 0:
-                final[k] = val
-            elif (k in self._woid.timestamps or k is 'expected_ttl') and val['secs'] > 0:
-                # converts secs to timestamp in insert
-                final[k] = val['secs']
-            elif k is 'source':
-                # check each part of the source
-                if len(val['origin']) > 0:
-                    final['source_origin'] = val['origin']
-                if len(val['creator']) > 0:
-                    final['source_creator'] = val['creator']
-            elif k is 'pose':
-                # insert the header
-                final['pose_seq'] = val['header']['seq']
-                if val['header']['stamp']['secs'] > 0:
-                    final['pose_stamp'] = val['header']['stamp']['secs']
-                if len(val['header']['frame_id']) > 0:
-                    final['pose_frame_id'] = val['header']['frame_id']
-                # insert the pose information
-                pos = val['pose']['pose']['position']
-                ori = val['pose']['pose']['orientation']
-                final['pose_position'] = [pos['x'], pos['y'], pos['z']]
-                final['pose_orientation'] = [ori['x'], ori['y'], ori['z'], ori['w']]
-                final['pose_covariance'] = val['pose']['covariance']
-            elif k is 'description_id' and val > 0:
-                final[k] = val
-            elif k is 'properties' and len(val) > 0:
-                final[k] = val
-            elif k is 'tags' and len(val) > 0:
-                final[k] = val
-        return final
 
     def create_world_object_instance(self, gh):
         '''
@@ -168,7 +128,7 @@ class WorldModel(object):
         goal.instance.instance_id = goal.instance_id
         # convert to a dict and update
         success = self._woid.update_entity_by_instance_id(goal.instance_id,
-                                                          message_converter.convert_ros_message_to_dictionary(goal.instance))
+                                                          convert_ros_message_to_dictionary(goal.instance))
         if success is not True:
             rospy.logwarn(goal.instance_id + ' could not be updated.')
             response = goal.instance_id + ' could not be updated. Is the instance_id valid?'
@@ -190,12 +150,11 @@ class WorldModel(object):
         gh.set_accepted()
         goal = gh.get_goal()
         # search for all of the tags
-        entities = self._woid.search_tags(goal.tags)
-        instances = []
+        result = self._woid.search_tags(goal.tags)
         # parse out the data
-        for e in entities:
-            del e['_id']
-            instances.append(message_converter.convert_dictionary_to_ros_message('world_msgs/WorldObjectInstance', e))
+        instances = []
+        for r in result:
+            instances.append(self._db_dict_to_world_object_instance_msg(r))
         # put the instances into the response
         result = WorldObjectInstanceTagSearchResult(instances)
         # send the response
@@ -212,7 +171,7 @@ class WorldModel(object):
         gh.set_accepted()
         goal = gh.get_goal()
         # convert to a dict and insert
-        description_id = self._wodd.insert(message_converter.convert_ros_message_to_dictionary(goal.description))
+        description_id = self._wodd.insert(convert_ros_message_to_dictionary(goal.description))
         # put the description_id into the response
         # result = CreateWorldObjectDescriptionResult(description_id)
         result = CreateWorldObjectDescriptionResult(0)
@@ -235,7 +194,7 @@ class WorldModel(object):
         exists = entity is not None
         description = WorldObjectDescription()
         if exists:
-            description = message_converter.convert_dictionary_to_ros_message('world_msgs/WorldObjectDescription', entity)
+            description = convert_dictionary_to_ros_message('world_msgs/WorldObjectDescription', entity)
             response = 'Success'
         else:
             response = goal.description_id + ' not found.'
@@ -243,7 +202,190 @@ class WorldModel(object):
         result = GetWorldObjectDescriptionResult(description, exists)
         # send the response
         gh.set_succeeded(result, response)
-
+        
+    def _world_object_instance_msg_to_db_dict(self, msg):
+        '''
+        Convert a WorldObjectInstance message to a database dictionary that can be inserted into
+        the World Model database. 
+        
+        @param msg: the WorldObjectInstance message 
+        @type  msg: WorldObjectInstance
+        @return: the converted dictionary
+        @rtype: dict
+        '''
+        # first create a dictionary from the message itself
+        ros_dict = convert_ros_message_to_dictionary(msg)
+        # now filter through to create a valid database dict
+        final = {}
+        for k in ros_dict.keys():
+            v = ros_dict[k]
+            if k is 'instance_id' and v > 0:
+                final[k] = v
+            elif k is 'name' and len(v) > 0:
+                final[k] = v
+            elif (k in self._woid.timestamps or k is 'expected_ttl') and v['secs'] + v['nsecs'] > 0:
+                # converts secs to timestamp in insert
+                final[k] = v['secs'] + (v['nsecs'] / 1000000000.0)
+            elif k is 'source':
+                # check each part of the source
+                if len(v['origin']) > 0:
+                    final['source_origin'] = v['origin']
+                if len(v['creator']) > 0:
+                    final['source_creator'] = v['creator']
+            elif k is 'pose':
+                # insert the header
+                final['pose_seq'] = v['header']['seq']
+                if v['header']['stamp']['secs'] + v['header']['stamp']['nsecs'] > 0:
+                    secs = v['header']['stamp']['secs']
+                    nsecs = v['header']['stamp']['nsecs']
+                    final['pose_stamp'] = secs + (nsecs / 1000000000.0)
+                if len(v['header']['frame_id']) > 0:
+                    final['pose_frame_id'] = v['header']['frame_id']
+                # insert the pose information
+                pos = v['pose']['pose']['position']
+                ori = v['pose']['pose']['orientation']
+                final['pose_position'] = [pos['x'], pos['y'], pos['z']]
+                final['pose_orientation'] = [ori['x'], ori['y'], ori['z'], ori['w']]
+                final['pose_covariance'] = v['pose']['covariance']
+            elif k is 'description_id' and v > 0:
+                final[k] = v
+            elif k is 'properties' and len(v) > 0:
+                final[k] = v
+            elif k is 'tags' and len(v) > 0:
+                final[k] = v
+        return final
+    
+    def _db_dict_to_world_object_instance_msg(self, entity):
+        '''
+        Convert a dictionary from the World Model database to a WorldObjectInstance message.
+        
+        @param entity: the dictionary from the database
+        @type  entity: dict
+        @return: the WorldObjectInstance message 
+        @rtype: WorldObjectInstance
+        '''
+        # check if the pose information is None
+        if(entity['pose_position'] is None):
+            pos = [0, 0, 0]
+        else:
+            pos = entity['pose_position']
+        if(entity['pose_orientation'] is None):
+            ori = [0, 0, 0, 0]
+        else:
+            ori = entity['pose_orientation']
+        if(entity['pose_covariance'] is None):
+            cov = [0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0]
+        else:
+            cov = entity['pose_covariance']
+        # filter through to create a valid ROS message dictionary
+        msg = {
+               'instance_id' : self._none_string_check(entity['instance_id']),
+               'name' : self._none_string_check(entity['name']),
+               'creation' : self._unix_time_to_ros_dict(entity['creation']),
+               'update' : self._unix_time_to_ros_dict(entity['update']),
+               'expected_ttl' : self._unix_time_to_ros_dict(entity['expected_ttl']),
+               'perceived_end' : self._unix_time_to_ros_dict(entity['perceived_end']),
+               'source' : {
+                           'origin' : self._none_string_check(entity['source_origin']),
+                           'creator' : self._none_string_check(entity['source_creator'])
+                           },
+               'pose' : {
+                         'header' : {
+                                     'seq' : self._none_int_check(entity['pose_seq']),
+                                     'stamp' : self._unix_time_to_ros_dict(entity['pose_stamp']),
+                                     'frame_id' : self._none_string_check(entity['pose_frame_id'])
+                                    },
+                         'pose' : {
+                                   'pose' : {
+                                             'position' : {
+                                                           'x' : pos[0],
+                                                           'y' : pos[1],
+                                                           'z' : pos[2],
+                                                           },
+                                             'orientation' : {
+                                                           'x' : ori[0],
+                                                           'y' : ori[1],
+                                                           'z' : ori[2],
+                                                           'w' : ori[3],
+                                                           },
+                                             },
+                                   'covariance' : cov
+                                   }
+                         },
+               'description_id' : self._none_int_check(entity['description_id']),
+               'properties' : self._none_list_check(entity['properties']),
+               'tags' : self._none_list_check(entity['tags']),
+               }
+        # convert to a ROS message
+        return convert_dictionary_to_ros_message('world_msgs/WorldObjectInstance', msg)
+    
+    def _none_list_check(self, l):
+        '''
+        Check if the given list is set to None and return an empty list if so. Otherwise, the 
+        original list is returned.
+        
+        @param l: the list to check
+        @type  l: list
+        @return: the original list or an empty list if l is None
+        @rtype: list
+        '''
+        if l is None:
+            return []
+        else:
+            return l
+    
+    def _none_int_check(self, i):
+        '''
+        Check if the given int is set to None and return 0 if so. Otherwise, the original int is 
+        returned.
+        
+        @param i: the int to check
+        @type  i: int
+        @return: the original int or 0 if i is None
+        @rtype: int
+        '''
+        if i is None:
+            return 0
+        else:
+            return i
+    
+    def _none_string_check(self, str):
+        '''
+        Check if the given string is set to None and return the empty string if so. Otherwise,
+        the original string is returned.
+        
+        @param str: the string object to check
+        @type  str: string
+        @return: the original string or the empty string if str is None
+        @rtype: string
+        '''
+        if str is None:
+            return ''
+        else:
+            return str
+    
+    def _unix_time_to_ros_dict(self, t):
+        '''
+        Convert the given unix floating point time into a ROS time dictionary.
+        
+        @param t: the unix time
+        @type  t: float
+        @return: the ROS time dictionary (i.e., secs and nsecs)
+        @rtype: dict
+        '''
+        # check if we have a valid time
+        if t is not None and t > 0:
+            secs = int(t)
+            nsecs = int((t - secs) * 1000000000.0)
+            return {'secs' : secs, 'nsecs' : nsecs}
+        else:
+            return {'secs' : 0, 'nsecs' : 0}
+    
 def main():
     '''
     The main run function for the world_model node.
