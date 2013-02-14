@@ -38,7 +38,7 @@ and updates the world model accordingly. This node will also wait for the robot 
 published and try to re-localize the robot upon startup.
 
 @author:  Russell Toris
-@version: February 4, 2013
+@version: February 14, 2013
 '''
 
 import rospy
@@ -52,7 +52,7 @@ class RobotPoseListener(object):
     '''
     The main RobotPoseListener object adds/updates the robot's pose in the world model.
     '''
-    
+
     def __init__(self):
         '''
         Create the RobotPoseListener to listen to a pose topic and update the world model 
@@ -72,7 +72,7 @@ class RobotPoseListener(object):
         self._woits.wait_for_server()
         # check for a topic to listen on
         t = rospy.get_param('~topic', '/robot_pose')
-        ns = rospy.get_param('~ns', 'my_robot')
+        ns = rospy.get_param('~ns', socket.gethostname())
         # check for an initial pose for this robot
         self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(['robot', ns]))
         resp = self._woits.get_result()
@@ -86,8 +86,8 @@ class RobotPoseListener(object):
             rospy.loginfo('Previous robot pose found. Waiting for ' + t + ' to become available...')
             rospy.wait_for_message(t, Pose)
             pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped)
-            #while pub.get_num_connections() < 1 and not rospy.is_shutdown():
-            #    rospy.sleep(0.1)
+            while pub.get_num_connections() < 1 and not rospy.is_shutdown():
+                rospy.sleep(0.1)
             localized = resp.instances[0].pose
             localized.header.frame_id = '/map'
             pub.publish(localized)
@@ -103,57 +103,58 @@ class RobotPoseListener(object):
         @param message: the ROS message for the pose
         @type  message: Pose
         @param args: the namespace for this node
-        @type  topic: dict
+        @type  args: dict
         '''
         # don't update so quickly
         rate = rospy.Rate(1)
-        # break up the message and store it
-        instance = WorldObjectInstance()
-        # source information for this node
-        instance.source.origin = socket.gethostname()
-        instance.source.creator = 'robot_pose_listener'
-        # position information
-        instance.pose.pose.pose = message
-        # default belief state
-        instance.pose.pose.covariance = [0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
-        # get our map ID
-        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(['map', args['ns']]))
-        map_resp = self._woits.get_result()
-        if len(map_resp.instances) > 0:
-            # check if we only found one (which should be the case)
-            if len(map_resp.instances) > 1:
-                rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns']
-                              + '". Defaulting to first result.')
-            # assign the ID
-            instance.pose.header.frame_id = map_resp.instances[0].instance_id
-        instance.pose.header.stamp = rospy.get_rostime()
         # tag this as a robot
-        instance.tags = ['robot', args['ns']]
+        tags = ['robot', args['ns']]
         # check if we already have a robot
-        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(instance.tags))
-        robot_resp = self._woits.get_result()
-        if len(robot_resp.instances) > 0:
+        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(tags))
+        resp = self._woits.get_result()
+        if len(resp.instances) > 0:
             # check if we only found one (which should be the case)
-            if len(robot_resp.instances) > 1:
+            if len(resp.instances) > 1:
                 rospy.logwarn('Multiple world object instances tagged with "robot" and "' + 
                               args['ns'] + '". Defaulting to first result.')
             # update with new information
-            robot_resp.instances[0].pose = instance.pose
+            resp.instances[0].pose.pose.pose = message
             # create a goal and do the update
-            self._uwoi.send_goal(UpdateWorldObjectInstanceGoal(robot_resp.instances[0].instance_id,
-                                                               robot_resp.instances[0]))
+            goal = UpdateWorldObjectInstanceGoal(resp.instances[0].instance_id, resp.instances[0])
+            # wait so that we don't try and re-update before this one is finished
+            self._uwoi.send_goal_and_wait(goal)
         else:
             # new instance
+            instance = WorldObjectInstance()
+            # source information for this node
+            instance.source.origin = socket.gethostname()
+            instance.source.creator = 'robot_pose_listener'
+            # position information
+            instance.tags = tags
+            instance.pose.pose.pose = message
+            # default belief state
+            instance.pose.pose.covariance = [0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                             0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
+                                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                             0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
+            # get our map ID
+            self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(['map', args['ns']]))
+            resp = self._woits.get_result()
+            if len(resp.instances) > 0:
+                # check if we only found one (which should be the case)
+                if len(resp.instances) > 1:
+                    rospy.logwarn('Multiple world object instances tagged with "map" and "' 
+                                  + args['ns'] + '". Defaulting to first result.')
+                # assign the ID
+                instance.pose.header.frame_id = str(resp.instances[0].instance_id)
+            instance.pose.header.stamp = rospy.get_rostime()
             instance.name = args['ns'] + ' Robot'
             # robots usually are moving around
             instance.expected_ttl = rospy.Duration(60)
             # create a goal and do the instance creation
-            self._cwoi.send_goal(CreateWorldObjectInstanceGoal(instance))
+            self._cwoi.send_goal_and_wait(CreateWorldObjectInstanceGoal(instance))
         # don't update so quickly
         rate.sleep()
 
