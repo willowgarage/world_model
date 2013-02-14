@@ -256,8 +256,8 @@ var WorldModelView2D = function(options) {
               view2D.worldModel.getWorldObjectDescription(
                   instances[0].description_id, function(description) {
                     // search for the OccupancyGrid
-                    for ( var i = 0; i < description.descriptions.length; i++) {
-                      var d = description.descriptions[i];
+                    for ( var i = 0; i < description.descriptors.length; i++) {
+                      var d = description.descriptors[i];
                       if (d.type === 'nav_msgs/OccupancyGrid') {
                         // parse out the data and extract the data
                         var message = JSON.parse(d.data.replace(/'/g, '"'));

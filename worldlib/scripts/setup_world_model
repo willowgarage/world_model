@@ -38,7 +38,7 @@ are setting up a **local** PostgreSQL database for use with the world model. It 
 to upgrade an exiting world model.
 
 @author:  Russell Toris
-@version: February 11, 2013
+@version: February 13, 2013
 '''
 
 import psycopg2
@@ -51,9 +51,11 @@ _db = 'world_model'
 _version = 'version'
 # current database version
 _v = '0.0.1'
-# name of the world object description table
+# name of the descriptors table
+_descriptors = 'descriptors'
+# name of the world object descriptions table
 _wod = 'world_object_descriptions'
-# name of the world object instance table
+# name of the world object instances table
 _woi = 'world_object_instances'
 
 def update_database(conn):
@@ -96,20 +98,52 @@ def init_database(conn):
     cur.execute("""
                 CREATE TABLE """ + _wod + """  (
                     description_id bigserial NOT NULL, 
-                    descriptions oid[], 
+                    name character varying, 
                     tags character varying[], 
                     CONSTRAINT description_id PRIMARY KEY (description_id)
                 ) WITH (
                     OIDS = FALSE
                 );
                 COMMENT ON COLUMN """ + _wod + """.description_id IS
-                    'Unique identifier for this description.';
-                COMMENT ON COLUMN """ + _wod + """.descriptions IS
-                    'List of all descriptions of this object.';
+                    'Unique identifier for this world object description.';
+                COMMENT ON COLUMN """ + _wod + """.name IS 
+                    'A human-readable name for this world object description.';
                 COMMENT ON COLUMN """ + _wod + """.tags IS
                     'High level tags.';
                 COMMENT ON TABLE """ + _wod + """ IS
                     'World object descriptions for the World Model.';
+            """)
+    print 'done.'
+    # descriptors table
+    sys.stdout.write('+ Creating table "' + _descriptors + '"... ')
+    cur.execute("""
+                CREATE TABLE """ + _descriptors + """  (
+                    descriptor_id bigserial NOT NULL, 
+                    description_id bigserial NOT NULL, 
+                    type character varying, 
+                    data oid, 
+                    ref character varying, 
+                    tags character varying[],
+                    CONSTRAINT descriptor_id PRIMARY KEY (descriptor_id),
+                    CONSTRAINT wod_id FOREIGN KEY (description_id) 
+                        REFERENCES """ + _wod + """ (description_id)
+                ) WITH (
+                    OIDS = FALSE
+                );
+                COMMENT ON COLUMN """ + _descriptors + """.descriptor_id IS 
+                    'The ID of the descriptor.';
+                COMMENT ON COLUMN """ + _descriptors + """.description_id IS 
+                    'The ID of the world object description this descriptor belongs to.';
+                COMMENT ON COLUMN """ + _descriptors + """.data IS 
+                    'Raw message data, XML (URDF), JSON, base64 encoding, ...).';
+                COMMENT ON COLUMN """ + _descriptors + """.type IS 
+                    'Type of data (nav_msgs/OccupancyGrid, URDF, Collada, ...).';
+                COMMENT ON COLUMN """ + _descriptors + """.ref IS 
+                    'JSON representation of source reference.';
+                COMMENT ON COLUMN """ + _descriptors + """.tags IS 
+                    'High level tag (kinematics, shape, ...).';
+                COMMENT ON TABLE """ + _descriptors + """ IS 
+                    'A descriptor of a world model object.';
             """)
     print 'done.'
     # world object instance table
@@ -195,8 +229,10 @@ if __name__ == '__main__':
         cur = conn.cursor()
         cur.execute("""SELECT * FROM information_schema.tables WHERE table_name=%s""", (_version,))
         if len(cur.fetchall()) is 0:
+            cur.close()
             init_database(conn)
         else:
+            cur.close()
             update_database(conn)
     except Exception as e:
         print e

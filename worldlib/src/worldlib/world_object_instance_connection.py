@@ -31,41 +31,50 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 '''
-The WorldObjectInstanceDatabase class provides functions to natively communicate with a PostgreSQL 
-world model database for the world_object_descriptions table.
+The WorldObjectInstanceConnection class provides functions to natively communicate with a PostgreSQL 
+World Model database for the world_object_instances table. World object instances are particular
+instances of an object and link to an external description. This can be thought of as the robot's
+working memory.
 
 @author:  Russell Toris
-@version: February 12, 2013
+@version: February 13, 2013
 '''
 
 import psycopg2
 
-class WorldObjectInstanceDatabase(object):
+class WorldObjectInstanceConnection(object):
     '''
-    The main WorldObjectInstanceDatabase object which communicates with the PostgreSQL world model 
+    The main WorldObjectInstanceConnection object which communicates with the PostgreSQL World Model 
     database.
     '''
-
-    # fields in the database that are timestamps
-    timestamps = ['creation', 'update', 'perceived_end', 'pose_stamp']
-    
-    # name of the world object instance table
-    _woi = 'world_object_instances'
 
     def __init__(self, user, pwd, host='localhost'):
         '''
         Creates the WorldObjectInstanceDatabase object and connects to the world object instance
         database.
+        
+        @param user: the database username
+        @type  user: string
+        @param pwd: the database password
+        @type  pwd: string
+        @param host: the database hostname
+        @type  host: string
         '''
+        # fields in the database that are timestamps
+        self.timestamps = ['creation', 'update', 'perceived_end', 'pose_stamp']
+        # name of the world object instances table
+        self._woi = 'world_object_instances'
+        # name of the database
+        self._db = 'world_model'
         # connect to the world model database
-        self.conn = psycopg2.connect(database='world_model', user=user, password=pwd, host=host)
+        self.conn = psycopg2.connect(database=self._db, user=user, password=pwd, host=host)
 
     def insert(self, entity):
         '''
-        Insert the given entity into the world object instance database. This will create a new 
+        Insert the given entity into the world_object_instances table. This will create a new 
         instance. The instance_id will be set to a unique value and returned.
         
-        @param entity: the entity to insert
+        @param entity: the entity to insert with the correct keys for the columns
         @type  entity: dict
         @return: the instance_id
         @rtype: integer
@@ -90,7 +99,7 @@ class WorldObjectInstanceDatabase(object):
             
     def update_entity_by_instance_id(self, instance_id, entity):
         '''
-        Update the entity in the world object instance database with the given instance_id, if one
+        Update the entity in the world_object_instances table with the given instance_id, if one
         exists.
         
         @param instance_id: the instance_id of the entity to update
@@ -106,6 +115,7 @@ class WorldObjectInstanceDatabase(object):
         cur.execute("""SELECT instance_id FROM """ + self._woi + 
                     """ WHERE instance_id = %s""", (instance_id,))
         if len(cur.fetchall()) is 0:
+            cur.close()
             return False
         else:
             # ensure the instance ID does not get set by the user
@@ -124,7 +134,7 @@ class WorldObjectInstanceDatabase(object):
     
     def search_tags(self, tags):
         '''
-        Search for and return all entities in the world object instance database that contain the
+        Search for and return all entities in the world_object_instances table that contain the
         given list of tags.
         
         @param tags: the list of tags to search for

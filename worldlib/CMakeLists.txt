@@ -43,6 +43,6 @@ catkin_package(
 ## Install ##
 #############
 
-install(PROGRAMS scripts/world_model
+install(PROGRAMS scripts/world_model scripts/setup_world_model
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

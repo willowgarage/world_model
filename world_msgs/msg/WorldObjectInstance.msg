@@ -1,4 +1,4 @@
-# a unique string identifier for this instance
+# a unique identifier for this instance
 int32 instance_id
 # a human-readable name for this instance
 string name

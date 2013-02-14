@@ -4,5 +4,5 @@ string type
 string data
 # JSON representation of source reference
 string ref
-# high level tag (kinematics, shape, ...)
-string tag
+# high level tags (kinematics, shape, ...)
+string[] tags

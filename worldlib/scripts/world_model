@@ -33,32 +33,40 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 '''
-The world_model node exposes the worldlib API over ROS topics and services.
+The world_model node exposes the worldlib API over ROS action servers.
 
 @author:  Russell Toris
-@version: February 12, 2013
+@version: February 13, 2013
 '''
 
 import rospy
 import actionlib
-from worldlib import world_object_instance_database, world_object_description_database
+from worldlib.world_object_instance_connection import WorldObjectInstanceConnection
+from worldlib.world_object_description_connection import WorldObjectDescriptionConnection
+from worldlib.descriptor_connection import DescriptorConnection
 from worldlib.msg import *
-from world_msgs.msg import WorldObjectInstance, WorldObjectDescription
-from rospy_message_converter.message_converter import convert_dictionary_to_ros_message
-from rospy_message_converter.message_converter import convert_ros_message_to_dictionary
+from rospy_message_converter.message_converter import *
 
 class WorldModel(object):
     '''
     The main WorldModel object which bridges the worldlib API to ROS action servers.
     '''
     
-    def __init__(self):
+    def __init__(self, user, pwd, host='localhost'):
         '''
         Creates and starts all action servers for the world model.
+        
+        @param user: the database username
+        @type  user: string
+        @param pwd: the database password
+        @type  pwd: string
+        @param host: the database hostname
+        @type  host: string
         '''
         # the connection to the databases
-        self._woid = world_object_instance_database.WorldObjectInstanceDatabase('willow', 'willow')
-        self._wodd = world_object_description_database.WorldObjectDescriptionDatabase()
+        self._woic = WorldObjectInstanceConnection(user, pwd, host)
+        self._wodc = WorldObjectDescriptionConnection(user, pwd, host)
+        self._dc = DescriptorConnection(user, pwd, host)
         # advertise the action servers
         self._cwoi = actionlib.ActionServer('/world_model/create_world_object_instance',
                                             CreateWorldObjectInstanceAction,
@@ -91,7 +99,7 @@ class WorldModel(object):
     def create_world_object_instance(self, gh):
         '''
         The create_world_object_instance action server will create a new instance in the world 
-        object instance database. A unique instance_id will be assigned and the creation time will 
+        object instances table. A unique instance_id will be assigned and the creation time will 
         be set.
         
         @param gh: the goal handle containing the instance to insert into the database
@@ -105,7 +113,7 @@ class WorldModel(object):
         goal.instance.update = t
         # convert to a dict and insert
         dict = self._world_object_instance_msg_to_db_dict(goal.instance)
-        instance_id = self._woid.insert(dict)
+        instance_id = self._woic.insert(dict)
         # put the instance_id into the response
         result = CreateWorldObjectInstanceResult(instance_id)
         # send the response
@@ -114,7 +122,7 @@ class WorldModel(object):
     def update_world_object_instance(self, gh):
         '''
         The update_world_object_instance action server will update an instance in the world object 
-        instance database. The update time will be set to the current time. The instance_id cannot 
+        instances table. The update time will be set to the current time. The instance_id cannot 
         be updated with this request.
         
         @param gh: the goal handle containing the instance to update in the database
@@ -128,7 +136,7 @@ class WorldModel(object):
         goal.instance.instance_id = goal.instance_id
         # convert to a dict and update
         dict = self._world_object_instance_msg_to_db_dict(goal.instance)
-        success = self._woid.update_entity_by_instance_id(goal.instance_id, dict)
+        success = self._woic.update_entity_by_instance_id(goal.instance_id, dict)
         if success is not True:
             rospy.logwarn(goal.instance_id + ' could not be updated.')
             response = goal.instance_id + ' could not be updated. Is the instance_id valid?'
@@ -150,11 +158,11 @@ class WorldModel(object):
         gh.set_accepted()
         goal = gh.get_goal()
         # search for all of the tags
-        result = self._woid.search_tags(goal.tags)
+        entity = self._woic.search_tags(goal.tags)
         # parse out the data
         instances = []
-        for r in result:
-            instances.append(self._db_dict_to_world_object_instance_msg(r))
+        for e in entity:
+            instances.append(self._db_dict_to_world_object_instance_msg(e))
         # put the instances into the response
         result = WorldObjectInstanceTagSearchResult(instances)
         # send the response
@@ -163,18 +171,27 @@ class WorldModel(object):
     def create_world_object_description(self, gh):
         '''
         The create_world_object_description action server will create a new description in the world 
-        object description database. A unique description_id will be assigned.
+        object descriptions table and store the descriptors. A unique description_id will be 
+        assigned.
         
         @param gh: the goal handle containing the description to insert into the database
         @type  gh: ServerGoalHandle
         '''
         gh.set_accepted()
         goal = gh.get_goal()
-        # convert to a dict and insert
-        description_id = self._wodd.insert(convert_ros_message_to_dictionary(goal.description))
+        # convert to a dict and insert the actual description
+        dict = self._world_object_description_msg_to_db_dict(goal.description)
+        description_id = self._wodc.insert(dict)
+        # now insert all of the descriptors
+        for d in goal.description.descriptors:
+            # convert to a dict
+            dict = self._descriptor_msg_to_db_dict(d)
+            # add the description_id
+            dict['description_id'] = description_id
+            # insert the actual descriptor
+            self._dc.insert(dict)
         # put the description_id into the response
-        # result = CreateWorldObjectDescriptionResult(description_id)
-        result = CreateWorldObjectDescriptionResult(0)
+        result = CreateWorldObjectDescriptionResult(description_id)
         # send the response
         gh.set_succeeded(result, 'Success')
         
@@ -189,17 +206,19 @@ class WorldModel(object):
         gh.set_accepted()
         goal = gh.get_goal()
         # make a request through the API
-        entity = self._wodd.search_description_id(goal.description_id)
-        # if a result was found, parse out the data
-        exists = entity is not None
-        description = WorldObjectDescription()
-        if exists:
-            description = convert_dictionary_to_ros_message('world_msgs/WorldObjectDescription', entity)
-            response = 'Success'
+        entity = self._wodc.search_description_id(goal.description_id)
+        # parse out the data
+        description = self._db_dict_to_world_object_description_msg(entity)
+        if entity is None:
+            response = str(goal.description_id) + ' not found.'
         else:
-            response = goal.description_id + ' not found.'
+            # now check for all descriptors
+            descriptors = self._dc.search_by_description_id(goal.description_id)
+            for d in descriptors:
+                description.descriptors.append(self._db_dict_to_descriptor_msg(d))
+            response = 'Success'
         # put the result into the response
-        result = GetWorldObjectDescriptionResult(description, exists)
+        result = GetWorldObjectDescriptionResult(description, entity is not None)
         # send the response
         gh.set_succeeded(result, response)
         
@@ -223,7 +242,7 @@ class WorldModel(object):
                 final[k] = v
             elif k is 'name' and len(v) > 0:
                 final[k] = v
-            elif (k in self._woid.timestamps or k is 'expected_ttl') and v['secs'] + v['nsecs'] > 0:
+            elif (k in self._woic.timestamps or k is 'expected_ttl') and v['secs'] + v['nsecs'] > 0:
                 # converts secs to timestamp in insert
                 final[k] = v['secs'] + (v['nsecs'] / 1000000000.0)
             elif k is 'source':
@@ -319,10 +338,97 @@ class WorldModel(object):
                          },
                'description_id' : self._none_int_check(entity['description_id']),
                'properties' : self._none_list_check(entity['properties']),
-               'tags' : self._none_list_check(entity['tags']),
+               'tags' : self._none_list_check(entity['tags'])
                }
         # convert to a ROS message
         return convert_dictionary_to_ros_message('world_msgs/WorldObjectInstance', msg)
+    
+    def _world_object_description_msg_to_db_dict(self, msg):
+        '''
+        Convert a WorldObjectDescription message to a database dictionary that can be inserted into
+        the World Model database. 
+        
+        @param msg: the WorldObjectDescription message 
+        @type  msg: WorldObjectDescription
+        @return: the converted dictionary
+        @rtype: dict
+        '''
+        # first create a dictionary from the message itself
+        ros_dict = convert_ros_message_to_dictionary(msg)
+        # now filter through to create a valid database dict
+        final = {}
+        for k in ros_dict.keys():
+            v = ros_dict[k]
+            if k is 'name' and len(v) > 0:
+                final[k] = v
+            elif k is 'tags' and len(v) > 0:
+                final[k] = v
+        return final
+    
+    def _db_dict_to_world_object_description_msg(self, entity):
+        '''
+        Convert a dictionary from the World Model database to a WorldObjectDescription message.
+        Descriptors must be added afterwards. An empty list will be put in its place.
+        
+        @param entity: the dictionary from the database
+        @type  entity: dict
+        @return: the WorldObjectDescription message 
+        @rtype: WorldObjectDescription
+        '''
+        # filter through to create a valid ROS message dictionary
+        msg = {
+               'description_id' : self._none_string_check(entity['description_id']),
+               'name' : self._none_string_check(entity['name']),
+               'descriptors' : [],
+               'tags' : self._none_list_check(entity['tags'])
+               }
+        # convert to a ROS message
+        return convert_dictionary_to_ros_message('world_msgs/WorldObjectDescription', msg)
+
+    def _db_dict_to_descriptor_msg(self, entity):
+        '''
+        Convert a dictionary from the World Model database to a Descriptor message.
+        
+        @param entity: the dictionary from the database
+        @type  entity: dict
+        @return: the Descriptor message 
+        @rtype: Descriptor
+        '''
+        # filter through to create a valid ROS message dictionary
+        msg = {
+               'type' : self._none_string_check(entity['type']),
+               'data' : self._none_string_check(entity['data']),
+               'ref' : self._none_string_check(entity['ref']),
+               'tags' : self._none_list_check(entity['tags'])
+               }
+        # convert to a ROS message
+        return convert_dictionary_to_ros_message('world_msgs/Descriptor', msg)
+    
+    def _descriptor_msg_to_db_dict(self, msg):
+        '''
+        Convert a Descriptor message to a database dictionary that can be inserted into the World 
+        Model database. 
+        
+        @param msg: the Descriptor message 
+        @type  msg: Descriptor
+        @return: the converted dictionary
+        @rtype: dict
+        '''
+        # first create a dictionary from the message itself
+        ros_dict = convert_ros_message_to_dictionary(msg)
+        # now filter through to create a valid database dict
+        final = {}
+        for k in ros_dict.keys():
+            v = ros_dict[k]
+            if k is 'type' and len(v) > 0:
+                final[k] = v
+            elif k is 'data' and len(v) > 0:
+                final[k] = v
+            elif k is 'ref' and len(v) > 0:
+                final[k] = v
+            elif k is 'tags' and len(v) > 0:
+                final[k] = v
+        return final
     
     def _none_list_check(self, l):
         '''
@@ -392,7 +498,10 @@ def main():
     '''
     rospy.init_node('world_model')
     # create the object to handle everything
-    WorldModel()
+    user = rospy.get_param('~user', 'willow')
+    pwd = rospy.get_param('~password', 'willow')
+    host = rospy.get_param('~host', 'localhost')
+    WorldModel(user, pwd, host)
     rospy.spin()
 
 if __name__ == '__main__':
