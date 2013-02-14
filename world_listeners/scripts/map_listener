@@ -37,7 +37,7 @@ The map_listener node listens to a specified OccupancyGrid message and updates t
 accordingly.
 
 @author:  Russell Toris
-@version: February 4, 2013
+@version: February 14, 2013
 '''
 
 import rospy
@@ -45,7 +45,7 @@ import actionlib
 from nav_msgs.msg import OccupancyGrid
 from worldlib.msg import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription, Descriptor
-from rospy_message_converter import json_message_converter
+from rospy_message_converter.json_message_converter import convert_ros_message_to_json
 import socket
 
 class MapListener(object):
@@ -74,7 +74,7 @@ class MapListener(object):
         self._cwod.wait_for_server()
         # check for a topic to listen on
         t = rospy.get_param('~topic', '/map')
-        ns = rospy.get_param('~ns', 'my_robot')
+        ns = rospy.get_param('~ns', socket.gethostname())
         # subscribe to the topic with a queue size of 1
         rospy.Subscriber(t, OccupancyGrid, self.map_cb, {'topic' : t, 'ns' : ns}, 1)
         rospy.loginfo('Map Listener is Ready!')
@@ -88,18 +88,12 @@ class MapListener(object):
         @param message: the ROS message for the map
         @type  message: OccupancyGrid
         @param args: the topic and namespace for this node
-        @type  topic: dict
+        @type  args: dict
         '''
-        # break up the message and store it
-        instance = WorldObjectInstance()
-        # source information for this node
-        instance.source.origin = socket.gethostname()
-        instance.source.creator = 'map_listener'
-        # position information
-        instance.pose.pose.pose = message.info.origin
-        instance.tags = ['map', args['ns']]
+        # get the tags
+        tags = ['map', args['ns']]
         # check if we already have a map
-        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(instance.tags))
+        self._woits.send_goal_and_wait(WorldObjectInstanceTagSearchGoal(tags))
         resp = self._woits.get_result()
         if len(resp.instances) > 0:
             # check if we only found one (which should be the case)
@@ -107,19 +101,28 @@ class MapListener(object):
                 rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns']
                               + '". Defaulting to first result.')
             # create a goal and do the update (updates the timestamp only)
-            self._uwoi.send_goal(UpdateWorldObjectInstanceGoal(resp.instances[0].instance_id,
-                                                               resp.instances[0]))
+            goal = UpdateWorldObjectInstanceGoal(resp.instances[0].instance_id, resp.instances[0])
+            # wait so that we don't try and re-update before this one is finished
+            self._uwoi.send_goal_and_wait(goal)
         else:
             # new instance
+            instance = WorldObjectInstance()
             instance.name = args['ns'] + ' Map'
+            # source information for this node
+            instance.source.origin = socket.gethostname()
+            instance.source.creator = 'map_listener'
+            # position information
+            instance.pose.pose.pose = message.info.origin
             # maps usually last a long time (on year)
-            instance.expected_ttl = rospy.Duration(60 * 60 * 24 * 356)
+            instance.expected_ttl = rospy.Duration(30758400)
+            # set the tags
+            instance.tags = tags
             # create a description of the map using the occupancy grid
             object_description = WorldObjectDescription()
             descriptor = Descriptor()
             descriptor.type = 'nav_msgs/OccupancyGrid'
-            descriptor.data = json_message_converter.convert_ros_message_to_json(message)
-            descriptor.ref = args['topic']
+            descriptor.data = convert_ros_message_to_json(message)
+            descriptor.ref = '{"type":"topic", "topic":"' + args['topic'] + '"}'
             descriptor.tags.append('OccupancyGrid')
             object_description.descriptors.append(descriptor)
             object_description.tags.append('map')
@@ -127,7 +130,7 @@ class MapListener(object):
             self._cwod.send_goal_and_wait(CreateWorldObjectDescriptionGoal(object_description))
             instance.description_id = self._cwod.get_result().description_id
             # create a goal and do the instance creation
-            self._cwoi.send_goal(CreateWorldObjectInstanceGoal(instance))
+            self._cwoi.send_goal_and_wait(CreateWorldObjectInstanceGoal(instance))
 
 def main():
     '''

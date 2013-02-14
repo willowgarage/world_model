@@ -36,7 +36,7 @@
 The world_model node exposes the worldlib API over ROS action servers.
 
 @author:  Russell Toris
-@version: February 13, 2013
+@version: February 14, 2013
 '''
 
 import rospy
@@ -52,7 +52,7 @@ class WorldModel(object):
     The main WorldModel object which bridges the worldlib API to ROS action servers.
     '''
     
-    def __init__(self, user, pwd, host='localhost'):
+    def __init__(self, user, pwd, host):
         '''
         Creates and starts all action servers for the world model.
         
@@ -498,8 +498,8 @@ def main():
     '''
     rospy.init_node('world_model')
     # create the object to handle everything
-    user = rospy.get_param('~user', 'willow')
-    pwd = rospy.get_param('~password', 'willow')
+    user = rospy.get_param('~user', 'world')
+    pwd = rospy.get_param('~password', 'model')
     host = rospy.get_param('~host', 'localhost')
     WorldModel(user, pwd, host)
     rospy.spin()
