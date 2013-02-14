@@ -138,8 +138,6 @@ class DescriptorConnection(object):
             if k is 'data':
                 # store the data in a Large Object
                 lobj = self.conn.lobject()
-                print lobj.oid
-                print lobj.write(entity[k])
                 self.conn.commit()
                 final['values'] += (lobj.oid,)
             else :
