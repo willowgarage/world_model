@@ -13,7 +13,7 @@ find_package(catkin REQUIRED COMPONENTS std_msgs geometry_msgs message_generatio
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  Description.msg
+  Descriptor.msg
   PolygonWithPose.msg
   Source.msg
   WorldObjectInstance.msg

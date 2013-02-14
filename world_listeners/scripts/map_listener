@@ -44,7 +44,7 @@ import rospy
 import actionlib
 from nav_msgs.msg import OccupancyGrid
 from worldlib.msg import *
-from world_msgs.msg import WorldObjectInstance, WorldObjectDescription, Description
+from world_msgs.msg import WorldObjectInstance, WorldObjectDescription, Descriptor
 from rospy_message_converter import json_message_converter
 import socket
 
@@ -116,12 +116,13 @@ class MapListener(object):
             instance.expected_ttl = rospy.Duration(60 * 60 * 24 * 356)
             # create a description of the map using the occupancy grid
             object_description = WorldObjectDescription()
-            description = Description()
-            description.type = 'nav_msgs/OccupancyGrid'
-            description.data = json_message_converter.convert_ros_message_to_json(message)
-            description.ref = args['topic']
-            description.tag = 'OccupancyGrid'
-            object_description.descriptions.append(description)
+            descriptor = Descriptor()
+            descriptor.type = 'nav_msgs/OccupancyGrid'
+            descriptor.data = json_message_converter.convert_ros_message_to_json(message)
+            descriptor.ref = args['topic']
+            descriptor.tags.append('OccupancyGrid')
+            object_description.descriptors.append(descriptor)
+            object_description.tags.append('map')
             # create a goal and do the description creation
             self._cwod.send_goal_and_wait(CreateWorldObjectDescriptionGoal(object_description))
             instance.description_id = self._cwod.get_result().description_id

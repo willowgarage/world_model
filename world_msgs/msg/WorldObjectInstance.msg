@@ -1,5 +1,5 @@
-# a unique string identifier for this instance
-string instance_id
+# a unique identifier for this instance
+int32 instance_id
 # a human-readable name for this instance
 string name
 # creation time of the instance
@@ -15,7 +15,7 @@ world_msgs/Source source
 # position information with a belief state
 geometry_msgs/PoseWithCovarianceStamped pose
 # spatial descriptions of the object itself
-string description_id
+int32 description_id
 # object properties and relationships
 string[] properties
 # high level tags
