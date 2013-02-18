@@ -37,10 +37,11 @@ description is referenced by one or many world object instances are linked to on
 individual descriptors.
 
 @author:  Russell Toris
-@version: February 13, 2013
+@version: February 18, 2013
 '''
 
 import psycopg2
+import thread
 
 class WorldObjectDescriptionConnection(object):
     '''
@@ -57,6 +58,8 @@ class WorldObjectDescriptionConnection(object):
         self._wod = 'world_object_descriptions'
         # connect to the world model database
         self.conn = psycopg2.connect(database='world_model', user=user, password=pwd, host=host)
+        # create a lock 
+        self.lock = thread.allocate_lock()
         
     def insert(self, entity):
         '''
@@ -69,21 +72,22 @@ class WorldObjectDescriptionConnection(object):
         @return: the description_id
         @rtype: string
         '''
-        # create a cursor
-        cur = self.conn.cursor()
         # ensure the description ID does not get set by the user
         if 'description_id' in entity.keys():
             del entity['description_id']
         # build the SQL
         helper = self._build_sql_helper(entity)
-        # build the SQL
-        cur.execute("""INSERT INTO """ + self._wod + 
-                    """ (description_id, """ + helper['cols'] + """) 
-                    VALUES (nextval('world_object_descriptions_description_id_seq'), 
-                    """ + helper['holders'] + """) RETURNING description_id""", helper['values'])
-        description_id = cur.fetchone()[0]
-        self.conn.commit()
-        cur.close()
+        with self.lock:
+            # create a cursor
+            cur = self.conn.cursor()
+            # build the SQL
+            cur.execute("""INSERT INTO """ + self._wod + 
+                        """ (description_id, """ + helper['cols'] + """) 
+                        VALUES (nextval('world_object_descriptions_description_id_seq'), 
+                        """ + helper['holders'] + """) RETURNING description_id""", helper['values'])
+            description_id = cur.fetchone()[0]
+            self.conn.commit()
+            cur.close()
         # return the description ID
         return description_id
 
@@ -97,13 +101,14 @@ class WorldObjectDescriptionConnection(object):
         @return: the entity found, or None if an invalid description_id was given
         @rtype:  dict
         '''
-        # create a cursor
-        cur = self.conn.cursor()
-        # check if the description actually exists
-        cur.execute("""SELECT * FROM """ + self._wod + 
-                    """ WHERE description_id = %s""", (description_id,))
-        result = cur.fetchone()
-        cur.close()
+        with self.lock:
+            # create a cursor
+            cur = self.conn.cursor()
+            # check if the description actually exists
+            cur.execute("""SELECT * FROM """ + self._wod + 
+                        """ WHERE description_id = %s""", (description_id,))
+            result = cur.fetchone()
+            cur.close()
         if result is None:
             return None
         else:

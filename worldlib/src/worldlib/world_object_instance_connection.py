@@ -37,10 +37,11 @@ instances of an object and link to an external description. This can be thought 
 working memory.
 
 @author:  Russell Toris
-@version: February 13, 2013
+@version: February 18, 2013
 '''
 
 import psycopg2
+import thread
 
 class WorldObjectInstanceConnection(object):
     '''
@@ -68,6 +69,8 @@ class WorldObjectInstanceConnection(object):
         self._db = 'world_model'
         # connect to the world model database
         self.conn = psycopg2.connect(database=self._db, user=user, password=pwd, host=host)
+        # create a lock 
+        self.lock = thread.allocate_lock()
 
     def insert(self, entity):
         '''
@@ -79,21 +82,22 @@ class WorldObjectInstanceConnection(object):
         @return: the instance_id
         @rtype: integer
         '''
-        # create a cursor
-        cur = self.conn.cursor()
         # ensure the instance ID does not get set by the user
         if 'instance_id' in entity.keys():
             del entity['instance_id']
         # build the SQL
         helper = self._build_sql_helper(entity)
-        # build the SQL
-        cur.execute("""INSERT INTO """ + self._woi + 
-                    """ (instance_id, """ + helper['cols'] + """) 
-                    VALUES (nextval('world_object_instances_instance_id_seq'), 
-                    """ + helper['holders'] + """) RETURNING instance_id""", helper['values'])
-        instance_id = cur.fetchone()[0]
-        self.conn.commit()
-        cur.close()
+        with self.lock:
+            # create a cursor
+            cur = self.conn.cursor()
+            # build the SQL
+            cur.execute("""INSERT INTO """ + self._woi + 
+                        """ (instance_id, """ + helper['cols'] + """) 
+                        VALUES (nextval('world_object_instances_instance_id_seq'), 
+                        """ + helper['holders'] + """) RETURNING instance_id""", helper['values'])
+            instance_id = cur.fetchone()[0]
+            self.conn.commit()
+            cur.close()
         # return the instance ID
         return instance_id
             
@@ -109,28 +113,30 @@ class WorldObjectInstanceConnection(object):
         @return: if an entity was found and updated with the given instance_id
         @rtype:  bool
         '''
-        # create a cursor
-        cur = self.conn.cursor()
-        # check if the instance actually exists
-        cur.execute("""SELECT instance_id FROM """ + self._woi + 
-                    """ WHERE instance_id = %s""", (instance_id,))
-        if len(cur.fetchall()) is 0:
-            cur.close()
-            return False
-        else:
-            # ensure the instance ID does not get set by the user
-            if 'instance_id' in entity.keys():
-                del entity['instance_id']
-            # build the SQL
-            helper = self._build_sql_helper(entity)
-            # build the SQL
-            helper['values'] += (instance_id,)
-            cur.execute("""UPDATE """ + self._woi + 
-                        """ SET (""" + helper['cols'] + """) = (""" + helper['holders'] + 
-                        """) WHERE instance_id = %s""", helper['values'])
-            self.conn.commit()
-            cur.close()
-            return True
+        with self.lock:
+            # create a cursor
+            cur = self.conn.cursor()
+            # check if the instance actually exists
+            cur.execute("""SELECT instance_id FROM """ + self._woi + 
+                        """ WHERE instance_id = %s""", (instance_id,))
+            if len(cur.fetchall()) is 0:
+                cur.close()
+                result = False
+            else:
+                # ensure the instance ID does not get set by the user
+                if 'instance_id' in entity.keys():
+                    del entity['instance_id']
+                # build the SQL
+                helper = self._build_sql_helper(entity)
+                # build the SQL
+                helper['values'] += (instance_id,)
+                cur.execute("""UPDATE """ + self._woi + 
+                            """ SET (""" + helper['cols'] + """) = (""" + helper['holders'] + 
+                            """) WHERE instance_id = %s""", helper['values'])
+                self.conn.commit()
+                cur.close()
+                result = True
+        return result
     
     def search_tags(self, tags):
         '''
@@ -144,9 +150,7 @@ class WorldObjectInstanceConnection(object):
         '''
         final = []
         # do not search empty arrays
-        if len(tags) > 0:   
-            # create a cursor
-            cur = self.conn.cursor()
+        if len(tags) > 0:
             # build the SQL
             sql = """SELECT * FROM """ + self._woi + """ WHERE ("""
             values = ()
@@ -155,13 +159,16 @@ class WorldObjectInstanceConnection(object):
                 values += (t,)
             # remove the trailing ' AND '
             sql = sql[:-5] + """);"""
-            cur.execute(sql, values)
-            # extract the values
-            results = cur.fetchall()
-            for r in results:
-                # convert to a dictionary and convert the timestamps
-                final.append(self._db_to_dict(r))
-            cur.close()
+            with self.lock:
+                # create a cursor
+                cur = self.conn.cursor()
+                cur.execute(sql, values)
+                # extract the values
+                results = cur.fetchall()
+                for r in results:
+                    # convert to a dictionary and convert the timestamps
+                    final.append(self._db_to_dict(r))
+                cur.close()
         return final
     
     def _db_to_dict(self, entity):

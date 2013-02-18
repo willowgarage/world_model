@@ -36,10 +36,11 @@ World Model database for the descriptors table. A descriptor is linked to a sing
 description.
 
 @author:  Russell Toris
-@version: February 13, 2013
+@version: February 18, 2013
 '''
 
 import psycopg2
+import thread
 
 class DescriptorConnection(object):
     '''
@@ -64,32 +65,43 @@ class DescriptorConnection(object):
         self._db = 'world_model'
         # connect to the world model database
         self.conn = psycopg2.connect(database=self._db, user=user, password=pwd, host=host)
+        # create a lock 
+        self.lock = thread.allocate_lock()
 
     def insert(self, entity):
         '''
         Insert the given entity into the descriptors table. This will create a new descriptor. The 
-        descriptor_id will be set to a unique value and returned.
+        descriptor_id will be set to a unique value and returned. Note that any data found in the 
+        data field (if any) will be stored into a Large Object and the OID will be placed in the 
+        spot of their value.
         
         @param entity: the entity to insert with the correct keys for the columns
         @type  entity: dict
         @return: the descriptor_id
         @rtype: integer
         '''
-        # create a cursor
-        cur = self.conn.cursor()
         # ensure the descriptor ID does not get set by the user
         if 'descriptor_id' in entity.keys():
             del entity['descriptor_id']
-        # build the SQL
-        helper = self._build_sql_helper(entity)
-        # build the SQL
-        cur.execute("""INSERT INTO """ + self._descriptors + 
-                    """ (descriptor_id, """ + helper['cols'] + """) 
-                    VALUES (nextval('descriptors_descriptor_id_seq'), 
-                    """ + helper['holders'] + """) RETURNING descriptor_id""", helper['values'])
-        descriptor_id = cur.fetchone()[0]
-        self.conn.commit()
-        cur.close()
+        with self.lock:
+            # check if there is data
+            if 'data' in entity.keys():
+                # store the data in a Large Object
+                lobj = self.conn.lobject()
+                lobj.write(entity['data'])
+                self.conn.commit()
+                entity['data'] = lobj.oid
+            # build the SQL
+            helper = self._build_sql_helper(entity)
+            # create a cursor
+            cur = self.conn.cursor()
+            cur.execute("""INSERT INTO """ + self._descriptors + 
+                        """ (descriptor_id, """ + helper['cols'] + """) 
+                        VALUES (nextval('descriptors_descriptor_id_seq'), 
+                        """ + helper['holders'] + """) RETURNING descriptor_id""", helper['values'])
+            descriptor_id = cur.fetchone()[0]
+            self.conn.commit()
+            cur.close()
         # return the descriptor ID
         return descriptor_id
     
@@ -104,26 +116,25 @@ class DescriptorConnection(object):
         @rtype:  list
         '''
         final = []
-        # create a cursor
-        cur = self.conn.cursor()
-        # check if the description actually exists
-        cur.execute("""SELECT * FROM """ + self._descriptors + 
-                    """ WHERE description_id = %s""", (description_id,))
-        # extract the values
-        results = cur.fetchall()
-        for r in results:
-            # convert to a dictionary and convert the timestamps
-            final.append(self._db_to_dict(r))
-        cur.close()
+        with self.lock:
+            # create a cursor
+            cur = self.conn.cursor()
+            # check if the description actually exists
+            cur.execute("""SELECT * FROM """ + self._descriptors + 
+                        """ WHERE description_id = %s""", (description_id,))
+            # extract the values
+            results = cur.fetchall()
+            for r in results:
+                # convert to a dictionary and convert the timestamps
+                final.append(self._db_to_dict(r))
+            cur.close()
         return final
     
     def _build_sql_helper(self, entity):
         '''
         A helper function to build the SQL for an insertion/update. This will take the entity dict
         and create a new dict containing a string of comma separated column names, a string of
-        comma separated place holders (e.g., '%s'), and a tuple of the values. Note that any data
-        found in the data field (if any) will be stored into a Large Object and the OID will be
-        placed in the spot of their value.
+        comma separated place holders (e.g., '%s'), and a tuple of the values.
         
         @param entity: the entity to build the SQL helper for
         @type  entity: dict
@@ -134,14 +145,7 @@ class DescriptorConnection(object):
         for k in entity.keys():
             final['cols'] += k + ', '
             final['holders'] += '%s, '
-            # check if this is the data
-            if k is 'data':
-                # store the data in a Large Object
-                lobj = self.conn.lobject()
-                self.conn.commit()
-                final['values'] += (lobj.oid,)
-            else :
-                final['values'] += (entity[k],)
+            final['values'] += (entity[k],)
         # remove trailing ', '
         final['cols'] = final['cols'][:-2]
         final['holders'] = final['holders'][:-2]
