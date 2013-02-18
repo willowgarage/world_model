@@ -91,4 +91,18 @@ var WorldModel = function(options) {
     // send the search
     goal.send();
   };
+  
+  //insert a new description into the world model
+  worldModel.createWorldObjectDescription = function(description, callback) {
+    // create the insertion goal
+    var goal = new cwod.Goal({
+      description : description
+    });
+    // define the callback
+    goal.on('result', function(result) {
+      callback(result.description_id);
+    });
+    // send the insertion
+    goal.send();
+  };
 };

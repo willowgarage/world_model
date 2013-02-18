@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<script type="text/javascript"
+	src="https://raw.github.com/RobotWebTools/rosjs/groovy-devel/dist/ros_bundle.js"></script>
+<script type="text/javascript"
+	src="https://raw.github.com/RobotWebTools/actionlibjs/groovy-devel/actionclient.js"></script>
+<script type="text/javascript"
+	src="https://raw.github.com/RobotWebTools/mjpegcanvasjs/groovy-devel/mjpegcanvas.js"></script>
+<script type="text/javascript"
+	src="https://raw.github.com/RobotWebTools/keyboardteleopjs/groovy-devel/keyboardteleop.js"></script>
+<script type="text/javascript" src="../annotator2d.js"></script>
+<script type="text/javascript"
+	src="../../worldmodelview2djs/worldmodelview2d.js"></script>
+<script type="text/javascript" src="../../worldmodeljs/worldmodel.js"></script>
+
+<script type="text/javascript">
+  function start() {
+    var host = '10.0.2.159';
+
+    var ros = new ROS('ws://' + host + ':9090');
+    
+    // setup the actionlib client
+    var navClient = new ActionClient({
+      ros : ros,
+      actionName : 'move_base_msgs/MoveBaseAction',
+      serverName : '/pr2_move_base'
+    });
+    
+    var driveToPOI = function(poi) {
+      var status = document.getElementById('nav-status');
+      status.innerHTML = '<b>Driving to ' + poi.name + '...</b>';
+      
+      // create a goal
+      var goal = new navClient.Goal({
+        target_pose : {
+          header : {
+            frame_id : '/map'
+          },
+          pose : poi.pose.pose.pose
+        }
+      });
+      goal.send();
+
+      // pass up the events to the user
+      goal.on('result', function(result) {
+        console.log(result);
+      });
+    }
+
+    // initialize the teleop
+    var teleop = new KeyboardTeleop({
+      ros : ros,
+      topic : '/base_controller/command',
+      throttle : 0.8
+    });
+
+    // initialize the world model object 
+    var world = new WorldModel({
+      ros : ros
+    });
+
+    // create the viwer
+    var view = new WorldModelView2D({
+      worldModel : world,
+      div : 'view'
+    });
+
+    // create the annotator
+    var annotator = new Annotator2D({
+      view : view,
+      div : 'annotator'
+    });
+
+    view.on('poi', function(poi) {
+      var nav = document.getElementById('nav');
+      while (nav.hasChildNodes()) {
+        nav.removeChild(nav.lastChild);
+      }
+
+      for ( var i = 0; i < poi.length; i++) {
+        var div = document.createElement('div');
+        div.innerHTML += '<b>' + poi[i].name + '&nbsp;&nbsp;&nbsp;&nbsp;</b>';
+        var button = document.createElement('button');
+        button.innerHTML = 'Go Here!';
+        button.onclick = (function() {
+          var cur = poi[i];
+          return function() {
+            driveToPOI(cur);
+          }
+        })();
+        div.appendChild(button);
+        nav.appendChild(div);
+      }
+    });
+
+    var mjpeg = new MjpegCanvas({
+      host : host,
+      topic : '/wide_stereo/right/image_rect_color',
+      canvasID : 'my-mjpeg',
+      width : 640,
+      height : 480
+    });
+  }
+</script>
+</head>
+
+<body onload="start()">
+	<table>
+		<tr>
+			<td>
+				<div id="view"></div></td>
+			<td>
+				<canvas id="my-mjpeg" width="640" height="480"></canvas></td>
+		</tr>
+		<tr>
+			<td>
+				<div id="annotator"></div></td>
+			<td>
+				<div id="nav-status"></div> <br /> <br /> <br />
+				<div id="nav"></div></td>
+		</tr>
+	</table>
+</body>
+</html>
