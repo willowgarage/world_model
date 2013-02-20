@@ -37,11 +37,12 @@ The map_listener node listens to a specified OccupancyGrid message and updates t
 accordingly.
 
 @author:  Russell Toris
-@version: February 14, 2013
+@version: February 20, 2013
 '''
 
 import rospy
 import actionlib
+import json
 from nav_msgs.msg import OccupancyGrid
 from worldlib.msg import *
 from world_msgs.msg import WorldObjectInstance, WorldObjectDescription, Descriptor
@@ -67,11 +68,14 @@ class MapListener(object):
                                                    WorldObjectInstanceTagSearchAction)
         self._cwod = actionlib.SimpleActionClient('/world_model/create_world_object_description',
                                                   CreateWorldObjectDescriptionAction)
+        self._wodts = actionlib.SimpleActionClient('/world_model/world_object_description_tag_search',
+                                                   WorldObjectDescriptionTagSearchAction)
         # wait for the action servers
         self._cwoi.wait_for_server()
         self._uwoi.wait_for_server()
         self._woits.wait_for_server()
         self._cwod.wait_for_server()
+        self._wodts.wait_for_server()
         # check for a topic to listen on
         t = rospy.get_param('~topic', '/map')
         ns = rospy.get_param('~ns', socket.gethostname())
@@ -79,14 +83,14 @@ class MapListener(object):
         rospy.Subscriber(t, OccupancyGrid, self.map_cb, {'topic' : t, 'ns' : ns}, 1)
         rospy.loginfo('Map Listener is Ready!')
 
-    def map_cb(self, message, args):
+    def map_cb(self, msg, args):
         '''
         Main callback for a map topic. This will insert a new entity in the world object instance 
         database or update an existing entity if one exists with the same tags. Furthermore,
         if this is creating a new map, the occupancy grid will be stored in its description.
         
-        @param message: the ROS message for the map
-        @type  message: OccupancyGrid
+        @param msg: the ROS message for the map
+        @type  msg: OccupancyGrid
         @param args: the topic and namespace for this node
         @type  args: dict
         '''
@@ -100,6 +104,9 @@ class MapListener(object):
             if len(resp.instances) > 1:
                 rospy.logwarn('Multiple world object instances tagged with "map" and "' + args['ns']
                               + '". Defaulting to first result.')
+            # check to see if we need to update the description
+            description_id = self._create_or_match_occupancy_grid_description(args['topic'], msg)
+            resp.instances[0].description_id = description_id
             # create a goal and do the update (updates the timestamp only)
             goal = UpdateWorldObjectInstanceGoal(resp.instances[0].instance_id, resp.instances[0])
             # wait so that we don't try and re-update before this one is finished
@@ -112,25 +119,86 @@ class MapListener(object):
             instance.source.origin = socket.gethostname()
             instance.source.creator = 'map_listener'
             # position information
-            instance.pose.pose.pose = message.info.origin
+            instance.pose.pose.pose = msg.info.origin
             # maps usually last a long time (on year)
             instance.expected_ttl = rospy.Duration(30758400)
             # set the tags
             instance.tags = tags
-            # create a description of the map using the occupancy grid
+            # create or match a description of the map using the occupancy grid
+            description_id = self._create_or_match_occupancy_grid_description(args['topic'], msg)
+            instance.description_id = description_id
+            # create a goal and do the instance creation
+            self._cwoi.send_goal_and_wait(CreateWorldObjectInstanceGoal(instance))
+
+    def _create_or_match_occupancy_grid_description(self, topic, msg):
+        '''
+        Checks all maps in the World Model to see if the description of this map already exists. If
+        so, the existing description_id is returned. If no such map description exists, one will be
+        created and the new description_id is returned.
+        
+        @param topic: the topic this message came from
+        @type  topic: string
+        @param msg: the ROS message for the map
+        @type  msg: OccupancyGrid
+        @return: the existing or new description_id
+        @rtype: integer
+        '''
+        # first check if we already have a match
+        description_id = self._match_occupancy_grid_description(topic, msg)
+        if description_id is None:
+            # we can now create a new one with this map
             object_description = WorldObjectDescription()
             descriptor = Descriptor()
             descriptor.type = 'nav_msgs/OccupancyGrid'
-            descriptor.data = convert_ros_message_to_json(message)
+            descriptor.data = convert_ros_message_to_json(msg)
             descriptor.ref = '{"type":"topic", "topic":"' + args['topic'] + '"}'
             descriptor.tags.append('OccupancyGrid')
             object_description.descriptors.append(descriptor)
             object_description.tags.append('map')
             # create a goal and do the description creation
             self._cwod.send_goal_and_wait(CreateWorldObjectDescriptionGoal(object_description))
-            instance.description_id = self._cwod.get_result().description_id
-            # create a goal and do the instance creation
-            self._cwoi.send_goal_and_wait(CreateWorldObjectInstanceGoal(instance))
+            description_id = self._cwod.get_result().description_id
+        # return the id we found or created
+        return description_id
+
+    def _match_occupancy_grid_description(self, topic, msg):
+        '''
+        Checks all maps in the World Model to see if the description of this map already exists. If
+        so, the description_id is returned. If no such map description exists, None is returned.
+        
+        @param topic: the topic this message came from
+        @type  topic: string
+        @param msg: the ROS message for the map
+        @type  msg: OccupancyGrid
+        @return: the existing description_id or None if no match was found
+        @rtype: integer
+        '''
+        # get all maps
+        self._wodts.send_goal_and_wait(WorldObjectDescriptionTagSearchGoal(['map']))
+        resp = self._wodts.get_result()
+        # check all the results (if any)
+        for description in resp.descriptions:
+           # check all descriptors
+           for d in description.descriptors:
+               # check the
+               if d.type == 'nav_msgs/OccupancyGrid':
+                   try:
+                       # check the reference
+                       ref = json.loads(d.ref)
+                       if 'topic' in ref.keys() and ref['topic'] == topic:
+                           # try and get the data out
+                           cur = json.loads(d.data)
+                           # check the meta data and actual map
+                           if (cur['info']['width'] == msg.info.width
+                               and cur['info']['width'] == msg.info.width
+                               and cur['info']['resolution'] == msg.info.resolution
+                               and tuple(cur['data']) == msg.data):
+                               return description.description_id
+                   except ValueError, e:
+                       # invalid json
+                       pass
+        # nothing found
+        return None
 
 def main():
     '''

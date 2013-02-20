@@ -113,6 +113,39 @@ class WorldObjectDescriptionConnection(object):
             return None
         else:
             return self._db_to_dict(result)
+        
+    def search_tags(self, tags):
+        '''
+        Search for and return all entities in the world_object_descriptions table that contain the
+        given list of tags.
+        
+        @param tags: the list of tags to search for
+        @type  tags: list
+        @return: the entities found
+        @rtype: list
+        '''
+        final = []
+        # do not search empty arrays
+        if len(tags) > 0:
+            # build the SQL
+            sql = """SELECT * FROM """ + self._wod + """ WHERE ("""
+            values = ()
+            for t in tags:
+                sql += "%s = ANY (tags) AND "
+                values += (t,)
+            # remove the trailing ' AND '
+            sql = sql[:-5] + """);"""
+            with self.lock:
+                # create a cursor
+                cur = self.conn.cursor()
+                cur.execute(sql, values)
+                # extract the values
+                results = cur.fetchall()
+                for r in results:
+                    # convert to a dictionary and convert the timestamps
+                    final.append(self._db_to_dict(r))
+                cur.close()
+        return final
     
     def _build_sql_helper(self, entity):
         '''

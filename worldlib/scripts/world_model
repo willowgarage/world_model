@@ -36,7 +36,7 @@
 The world_model node exposes the worldlib API over ROS action servers.
 
 @author:  Russell Toris
-@version: February 14, 2013
+@version: February 19, 2013
 '''
 
 import rospy
@@ -88,12 +88,17 @@ class WorldModel(object):
                                             GetWorldObjectDescriptionAction,
                                             self.get_world_object_description,
                                             auto_start=False)
+        self._wodts = actionlib.ActionServer('/world_model/world_object_description_tag_search',
+                                             WorldObjectDescriptionTagSearchAction,
+                                             self.world_object_description_tag_search,
+                                             auto_start=False)
         # start the action servers
         self._cwoi.start()
         self._uwoi.start()
         self._woits.start()
         self._cwod.start()
         self._gwod.start()
+        self._wodts.start()
         rospy.loginfo('World Model Node is Ready')
 
     def create_world_object_instance(self, gh):
@@ -152,7 +157,7 @@ class WorldModel(object):
         The world_object_instance_tag_search action server will search for all instances in the 
         database that have the given list of tags.
         
-        @param gh: the goal containing the instance to update in the database
+        @param gh: the goal containing the tags to search for
         @type  gh: ServerGoalHandle
         '''
         gh.set_accepted()
@@ -221,6 +226,32 @@ class WorldModel(object):
         result = GetWorldObjectDescriptionResult(description, entity is not None)
         # send the response
         gh.set_succeeded(result, response)
+        
+    def world_object_description_tag_search(self, gh):
+        '''
+        The world_object_description_tag_search action server will search for all descriptions in 
+        the database that have the given list of tags.
+        
+        @param gh: the goal containing the tags to search for
+        @type  gh: ServerGoalHandle
+        '''
+        gh.set_accepted()
+        goal = gh.get_goal()
+        # search for all of the tags
+        entity = self._wodc.search_tags(goal.tags)
+        # parse out the data
+        descriptions = []
+        for e in entity:
+            msg = self._db_dict_to_world_object_description_msg(e)
+             # now check for all descriptors
+            descriptors = self._dc.search_by_description_id(msg.description_id)
+            for d in descriptors:
+                msg.descriptors.append(self._db_dict_to_descriptor_msg(d))
+            descriptions.append(msg)
+        # put the instances into the response
+        result = WorldObjectDescriptionTagSearchResult(descriptions)
+        # send the response
+        gh.set_succeeded(result, 'Success')
         
     def _world_object_instance_msg_to_db_dict(self, msg):
         '''
