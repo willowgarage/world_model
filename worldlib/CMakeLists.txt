@@ -22,6 +22,7 @@ add_action_files(DIRECTORY action
   GetWorldObjectDescription.action
   UpdateWorldObjectInstance.action
   WorldObjectInstanceTagSearch.action
+  WorldObjectDescriptionTagSearch.action
 )
 
 generate_messages(
