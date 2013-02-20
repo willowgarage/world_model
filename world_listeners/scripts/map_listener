@@ -151,7 +151,7 @@ class MapListener(object):
             descriptor = Descriptor()
             descriptor.type = 'nav_msgs/OccupancyGrid'
             descriptor.data = convert_ros_message_to_json(msg)
-            descriptor.ref = '{"type":"topic", "topic":"' + args['topic'] + '"}'
+            descriptor.ref = '{"type":"topic", "topic":"' + topic + '"}'
             descriptor.tags.append('OccupancyGrid')
             object_description.descriptors.append(descriptor)
             object_description.tags.append('map')
