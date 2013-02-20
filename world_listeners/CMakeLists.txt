@@ -26,3 +26,8 @@ catkin_package()
 install(PROGRAMS scripts/map_listener scripts/robot_pose_listener
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
+
+## Mark a directory for installation
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+)

@@ -25,4 +25,5 @@
   <run_depend>worldlib</run_depend>
   <run_depend>rospy_message_converter</run_depend>
   <run_depend>actionlib</run_depend>
+  <run_depend>worldlib</run_depend>
 </package>
