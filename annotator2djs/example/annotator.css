@@ -1,0 +1,68 @@
+* { 
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Verdana, Arial, sans-ser;
+  font-size: 14px;
+  color: #101010;
+  background: rgba(0, 32, 0, 0.75);
+}
+
+#container {
+  background: rgba(255, 255, 255, 0.9);
+  border-top: 1px 1px 0 1px solid #333;
+  width: 1367px;
+  position: relative;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 5px 10px 5px 10px;
+  border-radius: 0 0 10px 10px;
+  padding: 10px;
+  box-shadow: 0px 0px 10px 3px #cccccc;
+}
+
+h2 {
+  font-variant: small-caps;
+  font-size: 26px;
+  text-shadow: 0px 2px 6px #ffffff;
+  margin-bottom: 10px;
+}
+
+#add-point-selector, #add-polygon-selector {
+  background: #CF9269;
+  border: none;
+  border-radius: 3px;
+  color: #f6f6f6;
+  font: 18px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  text-shadow: 0 1px 1px #101010;
+  text-transform: uppercase;
+  font-style: normal;
+}
+
+#add-point-selector:hover, #add-polygon-selector:hover {
+  background: #3E2C20;
+  cursor: pointer;
+}
+
+button {
+  background: #2E8A2E;
+  border: none;
+  border-radius: 10px;
+  color: #f6f6f6;
+  font: 18px;
+  letter-spacing: 1px;
+  margin: auto;
+  padding: 5px 10px;
+  text-shadow: 0 1px 1px #101010;
+  text-transform: uppercase;
+  font-style: normal;
+}
+
+button:hover {
+  background: #123712;
+  cursor: pointer;
+}
